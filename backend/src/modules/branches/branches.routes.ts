@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { authMiddleware } from "../../middlewares/auth.js";
+import { requireRoles } from "../../middlewares/roles.js";
+import { branchesController } from "./branches.controller.js";
+
+export const branchesRouter = Router();
+
+branchesRouter.use(authMiddleware, requireRoles(["OWNER"]));
+
+branchesRouter.get("/", (req, res) => branchesController.list(req, res));
+branchesRouter.get("/:branchId", (req, res) => branchesController.getById(req, res));
+branchesRouter.post("/", (req, res) => branchesController.create(req, res));
+branchesRouter.patch("/:branchId", (req, res) => branchesController.update(req, res));
+branchesRouter.delete("/:branchId", (req, res) => branchesController.remove(req, res));

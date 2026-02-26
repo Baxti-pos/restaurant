@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
+import { authMiddleware } from "../../middlewares/auth.js";
+import { requireRoles } from "../../middlewares/roles.js";
+import { meController } from "./me.controller.js";
+export const meRouter = Router();
+meRouter.use(authMiddleware, requireRoles(["WAITER"]), activeBranchMiddleware);
+meRouter.get("/tables", (req, res) => meController.tables(req, res));
+meRouter.get("/products", (req, res) => meController.products(req, res));
+meRouter.get("/shift/status", (req, res) => meController.shiftStatus(req, res));
+meRouter.post("/shift/start", (req, res) => meController.shiftStart(req, res));
+meRouter.post("/shift/end", (req, res) => meController.shiftEnd(req, res));
+meRouter.post("/orders/open-for-table", (req, res) => meController.openForTable(req, res));
+meRouter.post("/orders/:orderId/items", (req, res) => meController.addItem(req, res));

@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
+import { authMiddleware } from "../../middlewares/auth.js";
+import { requireRoles } from "../../middlewares/roles.js";
+import { reportsController } from "./reports.controller.js";
+
+export const reportsRouter = Router();
+
+reportsRouter.use(authMiddleware, requireRoles(["OWNER"]), activeBranchMiddleware);
+
+reportsRouter.get("/sales-summary", (req, res) => reportsController.salesSummary(req, res));
+reportsRouter.get("/dashboard", (req, res) => reportsController.dashboard(req, res));
+reportsRouter.get("/waiter-activity", (req, res) => reportsController.waiterActivity(req, res));

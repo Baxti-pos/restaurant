@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
+import { authMiddleware } from "../../middlewares/auth.js";
+import { requireRoles } from "../../middlewares/roles.js";
+import { waitersController } from "./waiters.controller.js";
+export const waitersRouter = Router();
+waitersRouter.use(authMiddleware, requireRoles(["OWNER"]), activeBranchMiddleware);
+waitersRouter.get("/", (req, res) => waitersController.list(req, res));
+waitersRouter.get("/:waiterId", (req, res) => waitersController.getById(req, res));
+waitersRouter.post("/", (req, res) => waitersController.create(req, res));
+waitersRouter.patch("/:waiterId", (req, res) => waitersController.update(req, res));
+waitersRouter.delete("/:waiterId", (req, res) => waitersController.remove(req, res));
