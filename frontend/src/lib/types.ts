@@ -1,4 +1,4 @@
-export type Role = 'owner';
+export type Role = 'owner' | 'waiter';
 export type TableStatus = 'empty' | 'occupied' | 'closing';
 export type OrderStatus = 'open' | 'closed';
 export type PaymentType = 'cash' | 'card' | 'transfer';
@@ -96,7 +96,7 @@ export interface DashboardStats {
   todayExpenses: number;
   todayProfit: number;
   openOrdersCount: number;
-  revenueChart: {date: string;tushum: number;rashod: number;}[];
+  revenueChart: {date: string;tushum: number;rashod: number;xarajat?: number;}[];
   expensesByType: {name: string;value: number;}[];
   ordersChart: {date: string;soni: number;}[];
   openOrders: Order[];

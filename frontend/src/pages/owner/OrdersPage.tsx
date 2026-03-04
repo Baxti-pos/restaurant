@@ -23,6 +23,7 @@ import {
   formatCurrency,
   formatDateShort,
   formatDateTime,
+  toLocalDateKey,
   todayStr } from
 '../../lib/formatters';
 import { clsx } from 'clsx';
@@ -45,12 +46,12 @@ type RangeMode = 'today' | 'yesterday' | 'custom';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDateKey(order: Order): string {
   const src = order.closedAt || order.createdAt;
-  return src.slice(0, 10);
+  return toLocalDateKey(src);
 }
 function yesterdayStr(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
+  return toLocalDateKey(d);
 }
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function OrdersPage({
@@ -161,12 +162,19 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
     }).
     then((data) => {
       setOrders(data);
+    }).
+    catch(() => {
+      setOrders([]);
+    }).
+    finally(() => {
       setLoading(false);
     });
   };
   useEffect(() => {
     fetchData();
-  }, [activeBranchId]);
+    const interval = window.setInterval(fetchData, 10000);
+    return () => window.clearInterval(interval);
+  }, [activeBranchId, rangeMode, customFrom, customTo]);
   // Group closed orders by day
   const dayGroups = useMemo<DayGroup[]>(() => {
     const closed = orders.filter((o) => o.status === 'closed');
@@ -558,6 +566,9 @@ function DailyTab({ activeBranchId }: {activeBranchId: string;}) {
     setLoading(true);
     api.reports.daily(activeBranchId, date).then((d) => {
       setData(d);
+    }).catch(() => {
+      setData(null);
+    }).finally(() => {
       setLoading(false);
     });
   };
@@ -664,6 +675,9 @@ function MonthlyTab({ activeBranchId }: {activeBranchId: string;}) {
     setLoading(true);
     api.reports.monthly(activeBranchId, from, to).then((d) => {
       setData(d);
+    }).catch(() => {
+      setData(null);
+    }).finally(() => {
       setLoading(false);
     });
   };
@@ -811,6 +825,9 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
     setLoading(true);
     api.reports.waiterActivity(activeBranchId, from, to).then((d) => {
       setData(d);
+    }).catch(() => {
+      setData([]);
+    }).finally(() => {
       setLoading(false);
     });
   };

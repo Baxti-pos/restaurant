@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, memo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Badge } from '../../components/ui/Badge';
@@ -18,11 +18,10 @@ import {
   X } from
 'lucide-react';
 import { api } from '../../lib/api';
-import { TableItem, Order } from '../../lib/types';
+import { Category, Product, TableItem, Order } from '../../lib/types';
 import { formatCurrency } from '../../lib/formatters';
 import { clsx } from 'clsx';
 import { getAuth } from '../../lib/auth';
-import { mockProducts, mockCategories } from '../../lib/mockData';
 interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
@@ -36,6 +35,8 @@ export function TablesPage({
   const isOwner = user?.role === 'owner';
   // ── Table list state ──────────────────────────────────────────────────────
   const [tables, setTables] = useState<TableItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   // ── Table form modal ──────────────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
@@ -67,15 +68,28 @@ export function TablesPage({
     itemId: null
   });
   // ── Load tables ───────────────────────────────────────────────────────────
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    api.tables.listByBranch(activeBranchId).then((d) => {
-      setTables(d);
+    try {
+      const [tablesData, productsData, categoriesData] = await Promise.all([
+      api.tables.listByBranch(activeBranchId),
+      api.products.listByBranch(activeBranchId),
+      api.categories.listByBranch(activeBranchId)]
+      );
+
+      setTables(tablesData);
+      setProducts(productsData.filter((product) => product.isActive));
+      setCategories(categoriesData);
+    } catch {
+      setTables([]);
+      setProducts([]);
+      setCategories([]);
+    } finally {
       setLoading(false);
-    });
+    }
   };
   useEffect(() => {
-    load();
+    void load();
   }, [activeBranchId]);
   // ── Table form ────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -263,7 +277,7 @@ export function TablesPage({
       itemId: null
     });
   };
-  const handleAddProduct = (product: (typeof mockProducts)[0]) => {
+  const handleAddProduct = (product: Product) => {
     if (!orderModal) return;
     const existing = orderModal.items.find((i) => i.productId === product.id);
     if (existing) {
@@ -305,12 +319,12 @@ export function TablesPage({
   // ── Derived product list ──────────────────────────────────────────────────
   const branchProducts = useMemo(
     () =>
-    mockProducts.filter((p) => p.branchId === activeBranchId && p.isActive),
-    [activeBranchId]
+    products.filter((p) => p.branchId === activeBranchId && p.isActive),
+    [activeBranchId, products]
   );
   const branchCategories = useMemo(
-    () => mockCategories.filter((c) => c.branchId === activeBranchId),
-    [activeBranchId]
+    () => categories.filter((c) => c.branchId === activeBranchId),
+    [activeBranchId, categories]
   );
   const filteredProducts = useMemo(() => {
     let list = branchProducts;

@@ -1,4 +1,4 @@
-import { PaymentMethod, Prisma, TableStatus } from "@prisma/client";
+import { OrderStatus, PaymentMethod, Prisma, TableStatus } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 export class OrdersError extends Error {
     statusCode;
@@ -102,6 +102,38 @@ const parsePaymentMethod = (value, required = false) => {
         throw new OrdersError(400, "paymentMethod yaroqsiz");
     }
     return normalized;
+};
+const parseOrderStatus = (value) => {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== "string") {
+        throw new OrdersError(400, "status yaroqsiz");
+    }
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "ALL") {
+        return "ALL";
+    }
+    if (!Object.values(OrderStatus).includes(normalized)) {
+        throw new OrdersError(400, "status yaroqsiz");
+    }
+    return normalized;
+};
+const parseDateField = (value, label) => {
+    if (value === undefined) {
+        return undefined;
+    }
+    if (typeof value !== "string" || !value.trim()) {
+        throw new OrdersError(400, `${label} sanasi yaroqsiz`);
+    }
+    const trimmed = value.trim();
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? new Date(`${trimmed}T${label === "from" ? "00:00:00.000" : "23:59:59.999"}`)
+        : new Date(trimmed);
+    if (Number.isNaN(date.getTime())) {
+        throw new OrdersError(400, `${label} sanasi yaroqsiz`);
+    }
+    return date;
 };
 const mapPrismaError = (error) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -245,6 +277,52 @@ const buildLineTotal = (unitPrice, quantity) => {
     return unitPrice.mul(new Prisma.Decimal(quantity));
 };
 export const ordersService = {
+    async list(branchId, query) {
+        await ensureActiveBranch(branchId);
+        const status = parseOrderStatus(query?.status);
+        const from = parseDateField(query?.from, "from");
+        const to = parseDateField(query?.to, "to");
+        if (from && to && from > to) {
+            throw new OrdersError(400, "from sanasi to sanasidan katta bo'lishi mumkin emas");
+        }
+        const where = {
+            branchId
+        };
+        if (status && status !== "ALL") {
+            where.status = status;
+        }
+        if (from || to) {
+            const dateFilter = {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {})
+            };
+            if (status === "CLOSED") {
+                where.closedAt = dateFilter;
+            }
+            else if (status === "OPEN") {
+                where.openedAt = dateFilter;
+            }
+            else {
+                where.OR = [
+                    {
+                        openedAt: dateFilter
+                    },
+                    {
+                        closedAt: dateFilter
+                    }
+                ];
+            }
+        }
+        return prisma.order.findMany({
+            where,
+            orderBy: status === "CLOSED"
+                ? [{ closedAt: "desc" }, { openedAt: "desc" }]
+                : status === "OPEN"
+                    ? [{ openedAt: "desc" }]
+                    : [{ createdAt: "desc" }],
+            select: orderSelect
+        });
+    },
     async listOpen(branchId) {
         await ensureActiveBranch(branchId);
         return prisma.order.findMany({

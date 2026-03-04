@@ -54,6 +54,19 @@ export function formatPhone(phone: string): string {
   return phone;
 }
 
+export function toLocalDateKey(value: string | Date): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return toLocalDateKey(new Date());
 }

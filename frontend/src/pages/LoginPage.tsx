@@ -3,10 +3,14 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Phone, Lock, Eye, EyeOff, Utensils } from 'lucide-react';
 import { api } from '../lib/api';
-import { setAuth } from '../lib/auth';
-import { User } from '../lib/types';
+import { Branch, User } from '../lib/types';
 interface LoginPageProps {
-  onLogin: (user: User, token: string) => void;
+  onLogin: (
+    user: User,
+    token: string,
+    activeBranchId: string | null,
+    branches: Branch[]
+  ) => void;
 }
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [phone, setPhone] = useState('');
@@ -33,13 +37,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     if (!validate()) return;
     setIsLoading(true);
     try {
-      const { user, token } = await api.auth.login(phone, password);
-      setAuth({
-        user,
-        token,
-        activeBranchId: null
-      });
-      onLogin(user, token);
+      const { user, token, activeBranchId, branches } = await api.auth.login(phone, password);
+      onLogin(user, token, activeBranchId, branches);
     } catch (err: any) {
       setError(err.message || 'Xatolik yuz berdi');
     } finally {

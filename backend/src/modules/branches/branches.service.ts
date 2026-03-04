@@ -51,6 +51,34 @@ const parseOptionalBoolean = (value: unknown) => {
   return value;
 };
 
+const parseOptionalShiftEnd = (value: unknown) => {
+  const parsed = parseOptionalString(value);
+  if (parsed === undefined || parsed === null) {
+    return parsed;
+  }
+
+  if (!/^\d{2}:\d{2}$/.test(parsed)) {
+    throw new BranchesError(400, "shiftEnd HH:MM formatida bo'lishi kerak");
+  }
+
+  const [hourRaw, minuteRaw] = parsed.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new BranchesError(400, "shiftEnd yaroqsiz");
+  }
+
+  return parsed;
+};
+
 const mapPrismaError = (error: unknown) => {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
@@ -85,6 +113,7 @@ export const branchesService = {
         id: true,
         name: true,
         address: true,
+        shiftEnd: true,
         isActive: true,
         createdAt: true,
         updatedAt: true
@@ -104,6 +133,7 @@ export const branchesService = {
         id: true,
         name: true,
         address: true,
+        shiftEnd: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -132,6 +162,7 @@ export const branchesService = {
 
     const name = parseStringRequired(payload.name, "Filial nomi");
     const address = parseOptionalString(payload.address);
+    const shiftEnd = parseOptionalShiftEnd(payload.shiftEnd);
     const isActive = parseOptionalBoolean(payload.isActive);
 
     try {
@@ -140,12 +171,14 @@ export const branchesService = {
           ownerId,
           name,
           address: address ?? null,
+          shiftEnd: shiftEnd ?? null,
           ...(isActive !== undefined ? { isActive } : {})
         },
         select: {
           id: true,
           name: true,
           address: true,
+          shiftEnd: true,
           isActive: true,
           createdAt: true,
           updatedAt: true
@@ -176,6 +209,10 @@ export const branchesService = {
       data.address = parseOptionalString(payload.address) ?? null;
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "shiftEnd")) {
+      data.shiftEnd = parseOptionalShiftEnd(payload.shiftEnd) ?? null;
+    }
+
     if (Object.prototype.hasOwnProperty.call(payload, "isActive")) {
       const isActive = parseOptionalBoolean(payload.isActive);
       if (isActive !== undefined) {
@@ -195,6 +232,7 @@ export const branchesService = {
           id: true,
           name: true,
           address: true,
+          shiftEnd: true,
           isActive: true,
           createdAt: true,
           updatedAt: true
@@ -218,6 +256,7 @@ export const branchesService = {
         id: true,
         name: true,
         address: true,
+        shiftEnd: true,
         isActive: true,
         updatedAt: true
       }

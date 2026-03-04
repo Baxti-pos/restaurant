@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LoginPage } from './pages/LoginPage';
 import { BranchSelectPage } from './pages/BranchSelectPage';
 import { OwnerLayout } from './components/layout/OwnerLayout';
@@ -28,56 +28,128 @@ export function App() {
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [appReady, setAppReady] = useState(false);
+
+  const refreshBranches = async () => {
+    const list = await api.branches.list();
+    setBranches(list);
+    return list;
+  };
+
   // Restore session on mount
   useEffect(() => {
-    const auth = getAuth();
-    if (auth.token && auth.user) {
+    const bootstrap = async () => {
+      const auth = getAuth();
+      if (!auth.token || !auth.user) {
+        setAppReady(true);
+        return;
+      }
+
       setUser(auth.user);
       setIsAuthenticated(true);
-      if (auth.activeBranchId) {
-        setActiveBranchId(auth.activeBranchId);
+
+      if (auth.user.role !== 'owner') {
+        if (auth.activeBranchId) {
+          setActiveBranchId(auth.activeBranchId);
+        }
+        setAppReady(true);
+        return;
       }
-    }
-    api.branches.list().then((b) => {
-      setBranches(b);
+
+      try {
+        const list = await refreshBranches();
+        if (auth.activeBranchId && list.some((branch) => branch.id === auth.activeBranchId)) {
+          setActiveBranchId(auth.activeBranchId);
+        }
+      } catch {
+        clearAuth();
+        setUser(null);
+        setIsAuthenticated(false);
+        setActiveBranchId(null);
+      }
+
       setAppReady(true);
-    });
+    };
+
+    void bootstrap();
   }, []);
-  const handleLogin = (u: User, token: string) => {
+
+  const handleLogin = async (
+    u: User,
+    token: string,
+    initialActiveBranchId: string | null = null,
+    initialBranches: Branch[] = []
+  ) => {
     setUser(u);
     setIsAuthenticated(true);
     setAuth({
       user: u,
       token,
-      activeBranchId: null
+      activeBranchId: initialActiveBranchId
     });
+    setActiveBranchId(initialActiveBranchId);
+    setBranches(initialBranches);
+
+    if (u.role !== 'owner') {
+      return;
+    }
+
+    try {
+      await refreshBranches();
+    } catch {
+      if (initialBranches.length === 0) {
+        setBranches([]);
+      }
+    }
   };
-  const handleBranchSelect = (branchId: string) => {
-    setActiveBranchId(branchId);
-    const auth = getAuth();
-    setAuth({
-      ...auth,
-      activeBranchId: branchId
-    });
-    setCurrentPage('dashboard');
+
+  const handleBranchSelect = async (branchId: string) => {
+    try {
+      const result = await api.auth.selectBranch(branchId);
+      const auth = getAuth();
+
+      setAuth({
+        ...auth,
+        token: result.token,
+        activeBranchId: branchId
+      });
+
+      setActiveBranchId(branchId);
+      setCurrentPage('dashboard');
+    } catch {
+      setActiveBranchId(null);
+    }
   };
-  const handleSwitchBranch = (branchId: string) => {
-    setActiveBranchId(branchId);
-    const auth = getAuth();
-    setAuth({
-      ...auth,
-      activeBranchId: branchId
-    });
+
+  const handleSwitchBranch = async (branchId: string) => {
+    try {
+      const result = await api.auth.selectBranch(branchId);
+      const auth = getAuth();
+
+      setAuth({
+        ...auth,
+        token: result.token,
+        activeBranchId: branchId
+      });
+
+      setActiveBranchId(branchId);
+    } catch {
+      // ignore
+    }
   };
+
   const handleLogout = () => {
     clearAuth();
     setUser(null);
     setIsAuthenticated(false);
+    setBranches([]);
     setActiveBranchId(null);
     setCurrentPage('dashboard');
   };
+
   const handleBranchesChange = () => {
-    api.branches.list().then((b) => setBranches(b));
+    refreshBranches().catch(() => {
+      setBranches([]);
+    });
   };
   if (!appReady) {
     return (

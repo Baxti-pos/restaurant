@@ -23,6 +23,26 @@ app.use(
 );
 app.use(express.json());
 
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
+
+  console.log(
+    `[REQ] ${startedAtIso} ${req.method} ${req.originalUrl} ip=${req.ip ?? "-"}`
+  );
+
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    const finishedAtIso = new Date().toISOString();
+
+    console.log(
+      `[RES] ${finishedAtIso} ${req.method} ${req.originalUrl} status=${res.statusCode} duration=${durationMs}ms`
+    );
+  });
+
+  next();
+});
+
 app.use("/auth", authRouter);
 app.use("/telegram", telegramRouter);
 app.use("/branches", branchesRouter);

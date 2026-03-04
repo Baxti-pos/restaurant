@@ -55,6 +55,22 @@ const getContext = (req) => {
     };
 };
 export const ordersController = {
+    async list(req, res) {
+        try {
+            const ctx = getContext(req);
+            if (!ctx) {
+                return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+            }
+            const data = await ordersService.list(ctx.branchId, req.query);
+            return res.status(200).json({
+                message: "Buyurtmalar ro'yxati",
+                data
+            });
+        }
+        catch (error) {
+            return handleError(res, error);
+        }
+    },
     async listOpen(req, res) {
         try {
             const ctx = getContext(req);

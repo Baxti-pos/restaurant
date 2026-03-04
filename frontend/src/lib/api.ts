@@ -1,3 +1,5 @@
+import { getAuth } from './auth';
+import { toLocalDateKey, todayStr } from './formatters';
 import {
   Branch,
   Waiter,
@@ -9,423 +11,1167 @@ import {
   Expense,
   User,
   DashboardStats,
-  WaiterActivity } from
+  WaiterActivity,
+  PaymentType,
+  ExpenseType } from
 './types';
-import {
-  mockBranches,
-  mockWaiters,
-  mockTables,
-  mockCategories,
-  mockProducts,
-  mockOrders,
-  mockExpenses,
-  mockOwner } from
-'./mockData';
 
-// In-memory mutable state
-let branches = [...mockBranches];
-let waiters = [...mockWaiters];
-let tables = [...mockTables];
-let categories = [...mockCategories];
-let products = [...mockProducts];
-let orders = [...mockOrders];
-let expenses = [...mockExpenses];
+type BackendRole = 'OWNER' | 'WAITER';
+type BackendTableStatus = 'AVAILABLE' | 'OCCUPIED' | 'DISABLED';
+type BackendOrderStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
+type BackendPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MIXED';
 
-const delay = (ms = 350) => new Promise((res) => setTimeout(res, ms));
-const uid = () => Math.random().toString(36).slice(2, 10);
+interface BackendEnvelope<T> {
+  message?: string;
+  data?: T;
+}
+
+interface BackendBranch {
+  id: string;
+  name: string;
+  address: string | null;
+  shiftEnd?: string | null;
+  isActive: boolean;
+}
+
+interface BackendAuthUser {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  role: BackendRole;
+  branchId: string | null;
+  activeBranchId: string | null;
+}
+
+interface BackendLoginResult {
+  accessToken: string;
+  requiresBranchSelection: boolean;
+  user: BackendAuthUser;
+  branches: BackendBranch[];
+}
+
+interface BackendWaiter {
+  id: string;
+  branchId: string | null;
+  fullName: string;
+  phone: string | null;
+  telegramUserId: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface BackendCategory {
+  id: string;
+  branchId: string;
+  name: string;
+  sortOrder: number;
+  isActive?: boolean;
+}
+
+interface BackendProduct {
+  id: string;
+  branchId: string;
+  categoryId: string;
+  name: string;
+  price: string | number;
+  isActive: boolean;
+  sortOrder?: number;
+}
+
+interface BackendTableOpenOrder {
+  id: string;
+}
+
+interface BackendTable {
+  id: string;
+  branchId: string;
+  name: string;
+  status: BackendTableStatus;
+  orders?: BackendTableOpenOrder[];
+}
+
+interface BackendOrderItem {
+  id: string;
+  productId: string | null;
+  productName: string;
+  unitPrice: string | number;
+  quantity: number;
+}
+
+interface BackendOrder {
+  id: string;
+  branchId: string;
+  tableId: string | null;
+  waiterId: string | null;
+  status: BackendOrderStatus;
+  totalAmount: string | number;
+  paymentMethod: BackendPaymentMethod | null;
+  openedAt: string;
+  closedAt: string | null;
+  table: {
+    id: string;
+    name: string;
+  } | null;
+  waiter: {
+    id: string;
+    fullName: string;
+  } | null;
+  items: BackendOrderItem[];
+}
+
+interface BackendExpense {
+  id: string;
+  branchId: string;
+  title: string;
+  amount: string | number;
+  description: string | null;
+  spentAt: string;
+  createdAt: string;
+}
+
+interface BackendDashboardPayload {
+  stats: {
+    orders: {
+      openCount: number;
+    };
+    finance: {
+      salesTotal: number;
+      expenseTotal: number;
+    };
+  };
+}
+
+interface BackendSalesSummaryDay {
+  date: string;
+  ordersCount: number;
+  totalAmount: number;
+}
+
+interface BackendSalesSummaryPayload {
+  summary: {
+    totalAmount: number;
+  };
+  byDay: BackendSalesSummaryDay[];
+}
+
+interface BackendWaiterActivityRow {
+  waiterId: string;
+  fullName: string;
+  openOrdersCount: number;
+  closedOrdersCount: number;
+  salesTotal: number;
+  itemsCount: number;
+}
+
+interface BackendWaiterActivityPayload {
+  data: BackendWaiterActivityRow[];
+}
+
+const API_BASE_URL =
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
+    ?.VITE_API_BASE_URL ?? '/api';
+const DEFAULT_SHIFT_START = '08:00';
+const DEFAULT_SHIFT_END = '22:00';
+const EXPENSE_META_PREFIX = '__baxti_expense_meta__:';
+
+const toNumber = (value: unknown, fallback = 0) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+};
+
+const toDateOnly = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return todayStr();
+  }
+
+  return toLocalDateKey(parsed);
+};
+
+const buildQuery = (params: Record<string, string | undefined>) => {
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') {
+      search.set(key, value);
+    }
+  }
+
+  const query = search.toString();
+  return query ? `?${query}` : '';
+};
+
+const extractErrorMessage = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const candidate = payload as { message?: unknown };
+  return typeof candidate.message === 'string' ? candidate.message : null;
+};
+
+const request = async <T>(
+  path: string,
+  options: (RequestInit & { skipAuth?: boolean }) = {}
+): Promise<T> => {
+  const url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const auth = getAuth();
+
+  const headers = new Headers(options.headers);
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (!options.skipAuth && auth.token) {
+    headers.set('Authorization', `Bearer ${auth.token}`);
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  const raw = await response.text();
+  let payload: unknown = null;
+
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+    extractErrorMessage(payload) ??
+    `So'rov bajarilmadi (${response.status})`;
+    throw new Error(message);
+  }
+
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return (payload as BackendEnvelope<T>).data as T;
+  }
+
+  return payload as T;
+};
+
+const mapRole = (role: BackendRole): User['role'] =>
+role === 'OWNER' ? 'owner' : 'waiter';
+
+const mapUser = (user: BackendAuthUser): User => ({
+  id: user.id,
+  name: user.fullName,
+  phone: user.phone ?? '',
+  role: mapRole(user.role)
+});
+
+const mapBranch = (branch: BackendBranch): Branch => ({
+  id: branch.id,
+  name: branch.name,
+  address: branch.address ?? '',
+  shiftStart: DEFAULT_SHIFT_START,
+  shiftEnd: branch.shiftEnd ?? DEFAULT_SHIFT_END,
+  timezone: 'Asia/Tashkent',
+  isActive: branch.isActive
+});
+
+const parseTelegramUserId = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = value.replace(/\D/g, '');
+  return digits || null;
+};
+
+const mapWaiter = (waiter: BackendWaiter): Waiter => ({
+  id: waiter.id,
+  branchId: waiter.branchId ?? '',
+  name: waiter.fullName,
+  phone: waiter.phone ?? '',
+  telegramId: waiter.telegramUserId ?? '',
+  isEnabled: waiter.isActive,
+  shiftStatus: waiter.isActive ? 'not_started' : 'ended',
+  createdAt: waiter.createdAt
+});
+
+const mapTableStatus = (status: BackendTableStatus): TableItem['status'] => {
+  if (status === 'OCCUPIED') {
+    return 'occupied';
+  }
+
+  if (status === 'DISABLED') {
+    return 'closing';
+  }
+
+  return 'empty';
+};
+
+const toBackendTableStatus = (status?: TableItem['status']) => {
+  if (status === 'occupied') {
+    return 'OCCUPIED' as const;
+  }
+
+  if (status === 'closing') {
+    return 'DISABLED' as const;
+  }
+
+  return 'AVAILABLE' as const;
+};
+
+const mapTable = (table: BackendTable): TableItem => ({
+  id: table.id,
+  branchId: table.branchId,
+  name: table.name,
+  status: mapTableStatus(table.status),
+  currentOrderId: table.orders?.[0]?.id
+});
+
+const mapCategory = (category: BackendCategory): Category => ({
+  id: category.id,
+  branchId: category.branchId,
+  name: category.name,
+  sortOrder: category.sortOrder
+});
+
+const mapProduct = (product: BackendProduct): Product => ({
+  id: product.id,
+  branchId: product.branchId,
+  categoryId: product.categoryId,
+  name: product.name,
+  price: toNumber(product.price),
+  isActive: product.isActive
+});
+
+const mapPaymentType = (
+  method: BackendPaymentMethod | null
+): Order['paymentType'] => {
+  if (!method) {
+    return undefined;
+  }
+
+  if (method === 'CASH') {
+    return 'cash';
+  }
+
+  if (method === 'CARD') {
+    return 'card';
+  }
+
+  if (method === 'TRANSFER') {
+    return 'transfer';
+  }
+
+  return undefined;
+};
+
+const toBackendPaymentMethod = (paymentType: PaymentType): BackendPaymentMethod => {
+  if (paymentType === 'cash') {
+    return 'CASH';
+  }
+
+  if (paymentType === 'card') {
+    return 'CARD';
+  }
+
+  return 'TRANSFER';
+};
+
+const mapOrderItem = (item: BackendOrderItem): OrderItem => ({
+  id: item.id,
+  productId: item.productId ?? '',
+  productName: item.productName,
+  quantity: item.quantity,
+  price: toNumber(item.unitPrice)
+});
+
+const mapOrder = (order: BackendOrder): Order => ({
+  id: order.id,
+  branchId: order.branchId,
+  tableId: order.tableId ?? order.table?.id ?? '',
+  tableName: order.table?.name ?? 'Stol',
+  waiterId: order.waiterId ?? order.waiter?.id ?? '',
+  waiterName: order.waiter?.fullName ?? 'Noma\'lum',
+  status: order.status === 'CLOSED' ? 'closed' : 'open',
+  items: order.items.map(mapOrderItem),
+  total: toNumber(order.totalAmount),
+  paymentType: mapPaymentType(order.paymentMethod),
+  createdAt: order.openedAt,
+  closedAt: order.closedAt ?? undefined
+});
+
+const normalizeExpenseType = (value: unknown): ExpenseType => {
+  if (value === 'salary' || value === 'market' || value === 'other') {
+    return value;
+  }
+
+  return 'other';
+};
+
+const encodeExpenseDescription = (type: ExpenseType, note?: string) => {
+  const payload = {
+    type,
+    note: note?.trim() ?? ''
+  };
+
+  return `${EXPENSE_META_PREFIX}${JSON.stringify(payload)}`;
+};
+
+const decodeExpenseDescription = (description: string | null) => {
+  if (!description) {
+    return {
+      type: 'other' as ExpenseType,
+      note: ''
+    };
+  }
+
+  if (!description.startsWith(EXPENSE_META_PREFIX)) {
+    return {
+      type: 'other' as ExpenseType,
+      note: description
+    };
+  }
+
+  const encoded = description.slice(EXPENSE_META_PREFIX.length);
+  try {
+    const parsed = JSON.parse(encoded) as { type?: unknown; note?: unknown };
+    return {
+      type: normalizeExpenseType(parsed.type),
+      note: typeof parsed.note === 'string' ? parsed.note : ''
+    };
+  } catch {
+    return {
+      type: 'other' as ExpenseType,
+      note: ''
+    };
+  }
+};
+
+const mapExpense = (expense: BackendExpense): Expense => {
+  const meta = decodeExpenseDescription(expense.description);
+
+  return {
+    id: expense.id,
+    branchId: expense.branchId,
+    type: meta.type,
+    name: expense.title,
+    amount: toNumber(expense.amount),
+    note: meta.note || undefined,
+    date: toDateOnly(expense.spentAt),
+    createdAt: expense.createdAt
+  };
+};
+
+const shiftDate = (offset: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return toLocalDateKey(date);
+};
+
+const getDayRange = (date: string) => ({
+  from: date,
+  to: date
+});
 
 export const api = {
   auth: {
     login: async (
     phone: string,
     password: string)
-    : Promise<{user: User;token: string;}> => {
-      await delay(600);
-      const cleanPhone = phone.replace(/\s/g, '');
-      if (
-      (cleanPhone === '+998901234567' ||
-      cleanPhone === '998901234567' ||
-      cleanPhone === '901234567') &&
-      password === 'admin123')
-      {
-        return {
-          user: mockOwner,
-          token: `mock-jwt-${mockOwner.id}-${Date.now()}`
-        };
-      }
-      throw new Error("Telefon raqam yoki parol noto'g'ri");
+    : Promise<{
+      user: User;
+      token: string;
+      requiresBranchSelection: boolean;
+      branches: Branch[];
+      activeBranchId: string | null;
+    }> => {
+      const data = await request<BackendLoginResult>('/auth/login', {
+        method: 'POST',
+        skipAuth: true,
+        body: JSON.stringify({
+          phone,
+          password
+        })
+      });
+
+      return {
+        user: mapUser(data.user),
+        token: data.accessToken,
+        requiresBranchSelection: data.requiresBranchSelection,
+        branches: (data.branches ?? []).map(mapBranch),
+        activeBranchId: data.user.activeBranchId
+      };
     },
+
+    selectBranch: async (
+    branchId: string)
+    : Promise<{
+      token: string;
+      branch: Branch;
+    }> => {
+      const data = await request<{
+        accessToken: string;
+        branch: BackendBranch;
+      }>('/auth/select-branch', {
+        method: 'POST',
+        body: JSON.stringify({ branchId })
+      });
+
+      return {
+        token: data.accessToken,
+        branch: mapBranch(data.branch)
+      };
+    },
+
     logout: async (): Promise<void> => {
-      await delay(200);
+      return Promise.resolve();
     }
   },
 
   branches: {
     list: async (): Promise<Branch[]> => {
-      await delay();
-      return [...branches];
+      const rows = await request<BackendBranch[]>('/branches');
+      return rows.map(mapBranch);
     },
+
     create: async (data: Omit<Branch, 'id'>): Promise<Branch> => {
-      await delay();
-      const item: Branch = { ...data, id: 'b' + uid() };
-      branches.push(item);
-      return item;
+      const created = await request<BackendBranch>('/branches', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name,
+          address: data.address,
+          shiftEnd: data.shiftEnd,
+          isActive: data.isActive
+        })
+      });
+
+      return mapBranch(created);
     },
+
     update: async (id: string, data: Partial<Branch>): Promise<Branch> => {
-      await delay();
-      branches = branches.map((b) => b.id === id ? { ...b, ...data } : b);
-      return branches.find((b) => b.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.address !== undefined) payload.address = data.address;
+      if (data.shiftEnd !== undefined) payload.shiftEnd = data.shiftEnd;
+      if (data.isActive !== undefined) payload.isActive = data.isActive;
+
+      const updated = await request<BackendBranch>(`/branches/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapBranch(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      branches = branches.filter((b) => b.id !== id);
+      await request<BackendBranch>(`/branches/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   waiters: {
-    listByBranch: async (branchId: string): Promise<Waiter[]> => {
-      await delay();
-      return waiters.filter((w) => w.branchId === branchId);
+    listByBranch: async (_branchId: string): Promise<Waiter[]> => {
+      const rows = await request<BackendWaiter[]>('/waiters');
+      return rows.map(mapWaiter);
     },
+
     create: async (data: Omit<Waiter, 'id' | 'createdAt'>): Promise<Waiter> => {
-      await delay();
-      const item: Waiter = {
-        ...data,
-        id: 'w' + uid(),
-        createdAt: new Date().toISOString()
-      };
-      waiters.push(item);
-      return item;
+      const created = await request<BackendWaiter>('/waiters', {
+        method: 'POST',
+        body: JSON.stringify({
+          fullName: data.name,
+          phone: data.phone || null,
+          telegramUserId: parseTelegramUserId(data.telegramId),
+          isActive: data.isEnabled
+        })
+      });
+
+      return mapWaiter(created);
     },
+
     update: async (id: string, data: Partial<Waiter>): Promise<Waiter> => {
-      await delay();
-      waiters = waiters.map((w) => w.id === id ? { ...w, ...data } : w);
-      return waiters.find((w) => w.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.fullName = data.name;
+      if (data.phone !== undefined) payload.phone = data.phone || null;
+      if (data.telegramId !== undefined) {
+        payload.telegramUserId = parseTelegramUserId(data.telegramId);
+      }
+      if (data.isEnabled !== undefined) payload.isActive = data.isEnabled;
+
+      const updated = await request<BackendWaiter>(`/waiters/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapWaiter(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      waiters = waiters.filter((w) => w.id !== id);
+      await request<BackendWaiter>(`/waiters/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   tables: {
-    listByBranch: async (branchId: string): Promise<TableItem[]> => {
-      await delay();
-      return tables.filter((t) => t.branchId === branchId);
+    listByBranch: async (_branchId: string): Promise<TableItem[]> => {
+      const rows = await request<BackendTable[]>('/tables');
+      return rows.
+      filter((table) => table.status !== 'DISABLED').
+      map(mapTable);
     },
+
     create: async (data: Omit<TableItem, 'id'>): Promise<TableItem> => {
-      await delay();
-      const item: TableItem = { ...data, id: 't' + uid() };
-      tables.push(item);
-      return item;
+      const created = await request<BackendTable>('/tables', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name,
+          status: toBackendTableStatus(data.status)
+        })
+      });
+
+      return mapTable(created);
     },
+
     update: async (
     id: string,
     data: Partial<TableItem>)
     : Promise<TableItem> => {
-      await delay();
-      tables = tables.map((t) => t.id === id ? { ...t, ...data } : t);
-      return tables.find((t) => t.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.status !== undefined) payload.status = toBackendTableStatus(data.status);
+
+      const updated = await request<BackendTable>(`/tables/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapTable(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      tables = tables.filter((t) => t.id !== id);
+      await request<BackendTable>(`/tables/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   categories: {
-    listByBranch: async (branchId: string): Promise<Category[]> => {
-      await delay();
-      return categories.
-      filter((c) => c.branchId === branchId).
+    listByBranch: async (_branchId: string): Promise<Category[]> => {
+      const rows = await request<BackendCategory[]>('/categories');
+      return rows.
+      filter((category) => category.isActive !== false).
+      map(mapCategory).
       sort((a, b) => a.sortOrder - b.sortOrder);
     },
+
     create: async (data: Omit<Category, 'id'>): Promise<Category> => {
-      await delay();
-      const item: Category = { ...data, id: 'c' + uid() };
-      categories.push(item);
-      return item;
+      const created = await request<BackendCategory>('/categories', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name,
+          sortOrder: data.sortOrder
+        })
+      });
+
+      return mapCategory(created);
     },
+
     update: async (id: string, data: Partial<Category>): Promise<Category> => {
-      await delay();
-      categories = categories.map((c) => c.id === id ? { ...c, ...data } : c);
-      return categories.find((c) => c.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.sortOrder !== undefined) payload.sortOrder = data.sortOrder;
+
+      const updated = await request<BackendCategory>(`/categories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapCategory(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      categories = categories.filter((c) => c.id !== id);
+      await request<BackendCategory>(`/categories/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   products: {
-    listByBranch: async (branchId: string): Promise<Product[]> => {
-      await delay();
-      return products.filter((p) => p.branchId === branchId);
+    listByBranch: async (_branchId: string): Promise<Product[]> => {
+      const rows = await request<BackendProduct[]>('/products');
+      return rows.map(mapProduct);
     },
+
     create: async (data: Omit<Product, 'id'>): Promise<Product> => {
-      await delay();
-      const item: Product = { ...data, id: 'p' + uid() };
-      products.push(item);
-      return item;
+      const created = await request<BackendProduct>('/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.name,
+          categoryId: data.categoryId,
+          price: data.price,
+          isActive: data.isActive
+        })
+      });
+
+      return mapProduct(created);
     },
+
     update: async (id: string, data: Partial<Product>): Promise<Product> => {
-      await delay();
-      products = products.map((p) => p.id === id ? { ...p, ...data } : p);
-      return products.find((p) => p.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.name = data.name;
+      if (data.categoryId !== undefined) payload.categoryId = data.categoryId;
+      if (data.price !== undefined) payload.price = data.price;
+      if (data.isActive !== undefined) payload.isActive = data.isActive;
+
+      const updated = await request<BackendProduct>(`/products/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapProduct(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      products = products.filter((p) => p.id !== id);
+      await request<BackendProduct>(`/products/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   expenses: {
     listByBranchAndDate: async (
-    branchId: string,
+    _branchId: string,
     date: string)
     : Promise<Expense[]> => {
-      await delay();
-      return expenses.filter((e) => e.branchId === branchId && e.date === date);
+      const query = buildQuery(getDayRange(date));
+      const rows = await request<BackendExpense[]>(`/expenses${query}`);
+      return rows.map(mapExpense);
     },
+
     create: async (
     data: Omit<Expense, 'id' | 'createdAt'>)
     : Promise<Expense> => {
-      await delay();
-      const item: Expense = {
-        ...data,
-        id: 'e' + uid(),
-        createdAt: new Date().toISOString()
-      };
-      expenses.push(item);
-      return item;
+      const created = await request<BackendExpense>('/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: data.name,
+          amount: data.amount,
+          description: encodeExpenseDescription(data.type, data.note),
+          spentAt: data.date
+        })
+      });
+
+      return mapExpense(created);
     },
+
     update: async (id: string, data: Partial<Expense>): Promise<Expense> => {
-      await delay();
-      expenses = expenses.map((e) => e.id === id ? { ...e, ...data } : e);
-      return expenses.find((e) => e.id === id)!;
+      const payload: Record<string, unknown> = {};
+
+      if (data.name !== undefined) payload.title = data.name;
+      if (data.amount !== undefined) payload.amount = data.amount;
+      if (data.date !== undefined) payload.spentAt = data.date;
+      if (data.type !== undefined || data.note !== undefined) {
+        payload.description = encodeExpenseDescription(
+          data.type ?? 'other',
+          data.note
+        );
+      }
+
+      const updated = await request<BackendExpense>(`/expenses/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapExpense(updated);
     },
+
     delete: async (id: string): Promise<void> => {
-      await delay();
-      expenses = expenses.filter((e) => e.id !== id);
+      await request<BackendExpense>(`/expenses/${id}`, {
+        method: 'DELETE'
+      });
     }
   },
 
   orders: {
     listByBranch: async (
-    branchId: string,
-    filters?: {status?: string;from?: string;to?: string;})
+    _branchId: string,
+    filters?: { status?: string; from?: string; to?: string })
     : Promise<Order[]> => {
-      await delay();
-      let result = orders.filter((o) => o.branchId === branchId);
-      if (filters?.status && filters.status !== 'all') {
-        result = result.filter((o) => o.status === filters.status);
-      }
-      if (filters?.from)
-      result = result.filter(
-        (o) => o.createdAt >= filters.from! + 'T00:00:00Z'
-      );
-      if (filters?.to)
-      result = result.filter((o) => o.createdAt <= filters.to! + 'T23:59:59Z');
-      return result.sort(
-        (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      const statusRaw = filters?.status?.toLowerCase();
+      const status =
+      statusRaw === 'open' ? 'OPEN' :
+      statusRaw === 'closed' ? 'CLOSED' :
+      statusRaw === 'all' ? 'ALL' :
+      undefined;
+
+      const query = buildQuery({
+        status,
+        from: filters?.from,
+        to: filters?.to
+      });
+
+      const rows = await request<BackendOrder[]>(`/orders${query}`);
+      return rows.map(mapOrder);
     },
+
     getById: async (id: string): Promise<Order> => {
-      await delay();
-      return orders.find((o) => o.id === id)!;
+      const order = await request<BackendOrder>(`/orders/${id}`);
+      return mapOrder(order);
     },
+
     create: async (data: Omit<Order, 'id' | 'closedAt'>): Promise<Order> => {
-      await delay();
-      const item: Order = { ...data, id: 'o' + uid() };
-      orders.push(item);
-      // Mark table as occupied
-      tables = tables.map((t) =>
-      t.id === data.tableId ?
-      { ...t, status: 'occupied' as const, currentOrderId: item.id } :
-      t
-      );
-      return item;
+      const opened = await request<{
+        order: BackendOrder;
+      }>('/orders/open-for-table', {
+        method: 'POST',
+        body: JSON.stringify({
+          tableId: data.tableId
+        })
+      });
+
+      let orderId = opened.order.id;
+
+      for (const item of data.items) {
+        if (!item.productId) {
+          continue;
+        }
+
+        const quantity = Math.max(1, Math.trunc(item.quantity || 1));
+        const added = await request<{
+          order: BackendOrder;
+        }>(`/orders/${orderId}/items`, {
+          method: 'POST',
+          body: JSON.stringify({
+            productId: item.productId,
+            quantity
+          })
+        });
+
+        orderId = added.order.id;
+      }
+
+      const finalOrder = await request<BackendOrder>(`/orders/${orderId}`);
+      return mapOrder(finalOrder);
     },
+
     updateItems: async (id: string, items: OrderItem[]): Promise<Order> => {
-      await delay();
-      const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-      orders = orders.map((o) => o.id === id ? { ...o, items, total } : o);
-      return orders.find((o) => o.id === id)!;
+      const currentOrder = await request<BackendOrder>(`/orders/${id}`);
+      const isOwner = getAuth().user?.role === 'owner';
+
+      const currentItemsMap = new Map(currentOrder.items.map((item) => [item.id, item]));
+      const nextItemsMap = new Map(
+        items.
+        filter((item) => currentItemsMap.has(item.id)).
+        map((item) => [item.id, item] as const)
+      );
+
+      for (const currentItem of currentOrder.items) {
+        if (!nextItemsMap.has(currentItem.id) && isOwner) {
+          await request<{ order: BackendOrder }>(`/orders/${id}/items/${currentItem.id}`, {
+            method: 'DELETE'
+          });
+        }
+      }
+
+      for (const [itemId, nextItem] of nextItemsMap.entries()) {
+        const currentItem = currentItemsMap.get(itemId);
+        if (!currentItem) {
+          continue;
+        }
+
+        const currentQty = currentItem.quantity;
+        const nextQty = Math.max(1, Math.trunc(nextItem.quantity || 1));
+        const currentPrice = toNumber(currentItem.unitPrice);
+        const nextPrice = toNumber(nextItem.price);
+
+        if (!isOwner && nextQty > currentQty && currentItem.productId) {
+          await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
+            method: 'POST',
+            body: JSON.stringify({
+              productId: currentItem.productId,
+              quantity: nextQty - currentQty
+            })
+          });
+          continue;
+        }
+
+        if (isOwner && (currentQty !== nextQty || Math.abs(currentPrice - nextPrice) > 0.0001)) {
+          await request<{ order: BackendOrder }>(`/orders/${id}/items/${itemId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              quantity: nextQty,
+              unitPrice: nextPrice
+            })
+          });
+        }
+      }
+
+      const newItems = items.filter((item) => !currentItemsMap.has(item.id));
+      for (const item of newItems) {
+        if (!item.productId) {
+          continue;
+        }
+
+        const quantity = Math.max(1, Math.trunc(item.quantity || 1));
+        await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
+          method: 'POST',
+          body: JSON.stringify({
+            productId: item.productId,
+            quantity
+          })
+        });
+      }
+
+      const finalOrder = await request<BackendOrder>(`/orders/${id}`);
+      return mapOrder(finalOrder);
     },
+
     close: async (
     id: string,
     paymentType: string,
-    _amount: number)
+    amount: number)
     : Promise<Order> => {
-      await delay();
-      orders = orders.map((o) =>
-      o.id === id ?
-      {
-        ...o,
-        status: 'closed' as const,
-        paymentType: paymentType as any,
-        closedAt: new Date().toISOString()
-      } :
-      o
-      );
-      // Free the table
-      const order = orders.find((o) => o.id === id)!;
-      tables = tables.map((t) =>
-      t.id === order.tableId ?
-      { ...t, status: 'empty' as const, currentOrderId: undefined } :
-      t
-      );
-      return order;
+      const normalizedPaymentType: PaymentType =
+      paymentType === 'cash' || paymentType === 'card' || paymentType === 'transfer' ?
+      paymentType :
+      'cash';
+
+      const result = await request<{
+        order: BackendOrder;
+      }>(`/orders/${id}/close`, {
+        method: 'POST',
+        body: JSON.stringify({
+          paymentMethod: toBackendPaymentMethod(normalizedPaymentType),
+          paidAmount: amount
+        })
+      });
+
+      return mapOrder(result.order);
     }
   },
 
   dashboard: {
-    getStats: async (branchId: string): Promise<DashboardStats> => {
-      await delay(500);
-      const todayStr = new Date().toISOString().split('T')[0];
-      const branchOrders = orders.filter((o) => o.branchId === branchId);
-      const todayOrders = branchOrders.filter((o) =>
-      o.createdAt.startsWith(todayStr)
-      );
-      const todayExpenses = expenses.filter(
-        (e) => e.branchId === branchId && e.date === todayStr
-      );
-      const todayRevenue = todayOrders.
-      filter((o) => o.status === 'closed').
-      reduce((s, o) => s + o.total, 0);
-      const todayExpTotal = todayExpenses.reduce((s, e) => s + e.amount, 0);
+    getStats: async (_branchId: string): Promise<DashboardStats> => {
+      const from = shiftDate(-6);
+      const to = todayStr();
+      const query = buildQuery({ from, to });
 
-      const days = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
-      const revenueChart = days.map((d, i) => ({
-        date: d,
-        tushum: 1200000 + i * 300000 + Math.random() * 200000,
-        xarajat: 300000 + i * 50000 + Math.random() * 100000
-      }));
+      const [dashboard, salesSummary, openOrders, expenses] = await Promise.all([
+      request<BackendDashboardPayload>('/reports/dashboard'),
+      request<BackendSalesSummaryPayload>(`/reports/sales-summary${query}`),
+      request<BackendOrder[]>('/orders/open'),
+      request<BackendExpense[]>(`/expenses${query}`)]
+      );
 
-      const salaryTotal = expenses.
-      filter((e) => e.branchId === branchId && e.type === 'salary').
-      reduce((s, e) => s + e.amount, 0);
-      const marketTotal = expenses.
-      filter((e) => e.branchId === branchId && e.type === 'market').
-      reduce((s, e) => s + e.amount, 0);
-      const otherTotal = expenses.
-      filter((e) => e.branchId === branchId && e.type === 'other').
-      reduce((s, e) => s + e.amount, 0);
+      const salesByDay = new Map(
+        salesSummary.byDay.map((day) => [day.date, day])
+      );
+
+      const expenseByDay = new Map<string, number>();
+      const expensesByTypeTotals: Record<ExpenseType, number> = {
+        salary: 0,
+        market: 0,
+        other: 0
+      };
+
+      for (const rawExpense of expenses) {
+        const expense = mapExpense(rawExpense);
+        expenseByDay.set(expense.date, (expenseByDay.get(expense.date) ?? 0) + expense.amount);
+        expensesByTypeTotals[expense.type] += expense.amount;
+      }
+
+      const revenueChart: DashboardStats['revenueChart'] = [];
+      const ordersChart: DashboardStats['ordersChart'] = [];
+
+      for (let i = 6; i >= 0; i -= 1) {
+        const date = shiftDate(-i);
+        const sales = salesByDay.get(date);
+        const expenseAmount = expenseByDay.get(date) ?? 0;
+
+        revenueChart.push({
+          date: date.slice(5),
+          tushum: sales?.totalAmount ?? 0,
+          rashod: expenseAmount,
+          xarajat: expenseAmount
+        });
+
+        ordersChart.push({
+          date: date.slice(5),
+          soni: sales?.ordersCount ?? 0
+        });
+      }
+
+      const todayRevenue = toNumber(dashboard.stats.finance.salesTotal);
+      const todayExpenses = toNumber(dashboard.stats.finance.expenseTotal);
 
       return {
         todayRevenue,
-        todayExpenses: todayExpTotal,
-        todayProfit: todayRevenue - todayExpTotal,
-        openOrdersCount: branchOrders.filter((o) => o.status === 'open').length,
+        todayExpenses,
+        todayProfit: todayRevenue - todayExpenses,
+        openOrdersCount: dashboard.stats.orders.openCount,
         revenueChart,
         expensesByType: [
-        { name: 'Ish haqi', value: salaryTotal || 2000000 },
-        { name: 'Bozor xarajati', value: marketTotal || 1650000 },
-        { name: 'Boshqa xarajat', value: otherTotal || 350000 }],
+        {
+          name: 'Ish haqi',
+          value: expensesByTypeTotals.salary
+        },
+        {
+          name: 'Bozor xarajati',
+          value: expensesByTypeTotals.market
+        },
+        {
+          name: 'Boshqa xarajat',
+          value: expensesByTypeTotals.other
+        }],
 
-        ordersChart: days.map((d, i) => ({
-          date: d,
-          soni: 40 + i * 8 + Math.floor(Math.random() * 15)
-        })),
-        openOrders: branchOrders.filter((o) => o.status === 'open')
+        ordersChart,
+        openOrders: openOrders.map(mapOrder)
       };
     }
   },
 
   reports: {
-    daily: async (branchId: string, date: string) => {
-      await delay();
-      const dayOrders = orders.filter(
-        (o) =>
-        o.branchId === branchId &&
-        o.createdAt.startsWith(date) &&
-        o.status === 'closed'
+    daily: async (_branchId: string, date: string) => {
+      const range = getDayRange(date);
+      const query = buildQuery(range);
+
+      const [summary, expenses, closedOrders] = await Promise.all([
+      request<BackendSalesSummaryPayload>(`/reports/sales-summary${query}`),
+      request<BackendExpense[]>(`/expenses${query}`),
+      request<BackendOrder[]>(`/orders${buildQuery({
+        status: 'CLOSED',
+        ...range
+      })}`)]
       );
-      const dayExpenses = expenses.filter(
-        (e) => e.branchId === branchId && e.date === date
-      );
-      const revenue = dayOrders.reduce((s, o) => s + o.total, 0);
-      const expTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
+
+      const revenue = toNumber(summary.summary.totalAmount);
+
+      let salary = 0;
+      let market = 0;
+      let other = 0;
+
+      for (const rawExpense of expenses) {
+        const expense = mapExpense(rawExpense);
+        if (expense.type === 'salary') salary += expense.amount;
+        if (expense.type === 'market') market += expense.amount;
+        if (expense.type === 'other') other += expense.amount;
+      }
+
+      const expensesTotal = salary + market + other;
+
+      let cash = 0;
+      let card = 0;
+      let transfer = 0;
+
+      for (const order of closedOrders) {
+        const amount = toNumber(order.totalAmount);
+        if (order.paymentMethod === 'CASH') cash += amount;
+        if (order.paymentMethod === 'CARD') card += amount;
+        if (order.paymentMethod === 'TRANSFER') transfer += amount;
+      }
+
       return {
         revenue,
-        expenses: expTotal,
-        profit: revenue - expTotal,
-        cash: dayOrders.
-        filter((o) => o.paymentType === 'cash').
-        reduce((s, o) => s + o.total, 0),
-        card: dayOrders.
-        filter((o) => o.paymentType === 'card').
-        reduce((s, o) => s + o.total, 0),
-        transfer: dayOrders.
-        filter((o) => o.paymentType === 'transfer').
-        reduce((s, o) => s + o.total, 0),
-        salary: dayExpenses.
-        filter((e) => e.type === 'salary').
-        reduce((s, e) => s + e.amount, 0),
-        market: dayExpenses.
-        filter((e) => e.type === 'market').
-        reduce((s, e) => s + e.amount, 0),
-        other: dayExpenses.
-        filter((e) => e.type === 'other').
-        reduce((s, e) => s + e.amount, 0)
+        expenses: expensesTotal,
+        profit: revenue - expensesTotal,
+        cash,
+        card,
+        transfer,
+        salary,
+        market,
+        other
       };
     },
-    monthly: async (branchId: string, from: string, to: string) => {
-      await delay();
+
+    monthly: async (_branchId: string, from: string, to: string) => {
+      const query = buildQuery({ from, to });
+
+      const [summary, expenses] = await Promise.all([
+      request<BackendSalesSummaryPayload>(`/reports/sales-summary${query}`),
+      request<BackendExpense[]>(`/expenses${query}`)]
+      );
+
+      const salesByDay = new Map(summary.byDay.map((day) => [day.date, day.totalAmount]));
+      const expenseByDay = new Map<string, number>();
+
+      for (const rawExpense of expenses) {
+        const expense = mapExpense(rawExpense);
+        expenseByDay.set(expense.date, (expenseByDay.get(expense.date) ?? 0) + expense.amount);
+      }
+
       const days: {
         date: string;
         tushum: number;
         xarajat: number;
         foyda: number;
       }[] = [];
-      const start = new Date(from),
-        end = new Date(to);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const ds = d.toISOString().split('T')[0];
-        const rev = 800000 + Math.random() * 1500000;
-        const exp = 200000 + Math.random() * 500000;
+
+      const cursor = new Date(`${from}T00:00:00.000`);
+      const end = new Date(`${to}T00:00:00.000`);
+
+      while (cursor.getTime() <= end.getTime()) {
+        const date = toLocalDateKey(cursor);
+        const tushum = salesByDay.get(date) ?? 0;
+        const xarajat = expenseByDay.get(date) ?? 0;
+
         days.push({
-          date: ds,
-          tushum: Math.round(rev),
-          xarajat: Math.round(exp),
-          foyda: Math.round(rev - exp)
+          date,
+          tushum,
+          xarajat,
+          foyda: tushum - xarajat
         });
+
+        cursor.setDate(cursor.getDate() + 1);
       }
+
       return {
         days,
         totals: {
-          tushum: days.reduce((s, d) => s + d.tushum, 0),
-          xarajat: days.reduce((s, d) => s + d.xarajat, 0),
-          foyda: days.reduce((s, d) => s + d.foyda, 0)
+          tushum: days.reduce((sum, day) => sum + day.tushum, 0),
+          xarajat: days.reduce((sum, day) => sum + day.xarajat, 0),
+          foyda: days.reduce((sum, day) => sum + day.foyda, 0)
         }
       };
     },
+
     waiterActivity: async (
-    branchId: string,
-    _from: string,
-    _to: string)
+    _branchId: string,
+    from: string,
+    to: string)
     : Promise<WaiterActivity[]> => {
-      await delay();
-      return waiters.
-      filter((w) => w.branchId === branchId).
-      map((w) => {
-        const wOrders = orders.filter(
-          (o) => o.branchId === branchId && o.waiterId === w.id
-        );
-        const closed = wOrders.filter((o) => o.status === 'closed');
-        const rev = closed.reduce((s, o) => s + o.total, 0);
+      const query = buildQuery({ from, to });
+      const payload = await request<BackendWaiterActivityPayload>(`/reports/waiter-activity${query}`);
+
+      return payload.data.map((row) => {
+        const revenue = toNumber(row.salesTotal);
+        const closedOrders = row.closedOrdersCount;
+
         return {
-          waiterId: w.id,
-          waiterName: w.name,
-          openedOrders: wOrders.length,
-          closedOrders: closed.length,
-          revenue: rev,
-          avgCheck: closed.length ? Math.round(rev / closed.length) : 0,
-          itemsAdded: wOrders.reduce(
-            (s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0),
-            0
-          )
+          waiterId: row.waiterId,
+          waiterName: row.fullName,
+          openedOrders: row.openOrdersCount + row.closedOrdersCount,
+          closedOrders,
+          revenue,
+          avgCheck: closedOrders > 0 ? Math.round(revenue / closedOrders) : 0,
+          itemsAdded: row.itemsCount
         };
       });
     }

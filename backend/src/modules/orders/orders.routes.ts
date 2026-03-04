@@ -8,6 +8,9 @@ export const ordersRouter = Router();
 
 ordersRouter.use(authMiddleware, activeBranchMiddleware);
 
+ordersRouter.get("/", requireRoles(["OWNER", "WAITER"]), (req, res) =>
+  ordersController.list(req, res)
+);
 ordersRouter.get("/open", requireRoles(["OWNER", "WAITER"]), (req, res) =>
   ordersController.listOpen(req, res)
 );

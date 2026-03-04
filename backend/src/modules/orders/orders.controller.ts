@@ -64,6 +64,23 @@ const getContext = (req: Request) => {
 };
 
 export const ordersController = {
+  async list(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+      }
+
+      const data = await ordersService.list(ctx.branchId, req.query as Record<string, unknown>);
+      return res.status(200).json({
+        message: "Buyurtmalar ro'yxati",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
   async listOpen(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
