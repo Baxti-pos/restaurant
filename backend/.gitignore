@@ -16,6 +16,10 @@ npm-debug.log*
 dist
 build
 
+
+
+
+
 # OS
 .DS_Store
 
