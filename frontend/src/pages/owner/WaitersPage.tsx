@@ -135,8 +135,8 @@ export function WaitersPage({
   };
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-end lg:justify-between">
+        <div className='hidden lg:block'>
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Ofitsantlar
           </h1>

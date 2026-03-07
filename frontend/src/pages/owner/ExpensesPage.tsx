@@ -274,7 +274,7 @@ export function ExpensesPage({
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className='hidden lg:block'>
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Xarajatlar
           </h1>
@@ -538,9 +538,9 @@ export function ExpensesPage({
       {/* Mobile FAB */}
       <button
         onClick={openCreateModal}
-        className="fixed bottom-24 right-4 z-40 lg:hidden bg-indigo-600 text-white rounded-full h-14 w-14 flex items-center justify-center shadow-lg hover:bg-indigo-700 transition-colors">
+        className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform">
 
-        <Plus className="h-6 w-6" />
+        <Plus className="h-7 w-7" />
       </button>
 
       {/* Edit/Create modal (Shared) */}

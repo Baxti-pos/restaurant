@@ -222,7 +222,7 @@ export function ProductsPage({
   };
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="lg:flex items-center justify-between hidden">
         <div>
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Mahsulotlar
@@ -661,7 +661,7 @@ export function ProductsPage({
               <span
                 className={clsx(
                   'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-                  prodForm.isActive ? 'translate-x-5' : 'translate-x-0.5'
+                  prodForm.isActive ? 'translate-x-0' : '-translate-x-5'
                 )} />
 
             </button>

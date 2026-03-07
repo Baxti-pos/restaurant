@@ -83,7 +83,7 @@ export function OrdersPage({
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
+      <div className='hidden lg:block'>
         <h1 className="text-lg md:text-xl font-bold text-slate-900">
           Sotuvlar
         </h1>

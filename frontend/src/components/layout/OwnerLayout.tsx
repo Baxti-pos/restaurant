@@ -354,7 +354,7 @@ export function OwnerLayout({
                 )}>
 
                 <Icon
-                  className={clsx('h-6 w-6', isActive && 'fill-current')}
+                  className={clsx('h-6 w-6', isActive)}
                   strokeWidth={isActive ? 2.5 : 2} />
 
                 <span className="text-[10px] font-medium">{tab.label}</span>
