@@ -20,6 +20,7 @@ import {
 import { api } from '../../lib/api';
 import { Category, Product, TableItem, Order } from '../../lib/types';
 import { formatCurrency } from '../../lib/formatters';
+import { printReceipt } from '../../lib/receiptPrinter';
 import { clsx } from 'clsx';
 import { getAuth } from '../../lib/auth';
 interface TablesPageProps {
@@ -303,10 +304,29 @@ export function TablesPage({
   // ── Close existing order / payment ────────────────────────────────────────
   const handleCloseOrder = async () => {
     if (!orderModal) return;
+    const closedOrder = orderModal;
+    const paidAtIso = new Date().toISOString();
+
     setClosing(true);
     try {
-      await api.orders.close(orderModal.id, paymentType, orderModal.total);
+      await api.orders.close(closedOrder.id, paymentType, closedOrder.total);
       toast.success('Buyurtma yopildi');
+
+      try {
+        await printReceipt({
+          branchName: activeBranchName || 'Filial',
+          tableName: closedOrder.tableName,
+          waiterName: closedOrder.waiterName,
+          orderId: closedOrder.id,
+          items: closedOrder.items,
+          total: closedOrder.total,
+          paymentType,
+          paidAtIso
+        });
+      } catch {
+        toast.error("Checkni chop etib bo'lmadi. Xprinter sozlamasini tekshiring");
+      }
+
       setPaymentOpen(false);
       setOrderModal(null);
       load();

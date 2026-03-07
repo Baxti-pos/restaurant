@@ -167,6 +167,20 @@ interface BackendWaiterActivityPayload {
   data: BackendWaiterActivityRow[];
 }
 
+interface WaiterCreateInput {
+  name: string;
+  phone: string;
+  telegramId: string;
+  isEnabled: boolean;
+}
+
+interface WaiterUpdateInput {
+  name?: string;
+  phone?: string;
+  telegramId?: string;
+  isEnabled?: boolean;
+}
+
 const API_BASE_URL =
   (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
     ?.VITE_API_BASE_URL ?? '/api';
@@ -588,7 +602,7 @@ export const api = {
       return rows.map(mapWaiter);
     },
 
-    create: async (data: Omit<Waiter, 'id' | 'createdAt'>): Promise<Waiter> => {
+    create: async (data: WaiterCreateInput): Promise<Waiter> => {
       const created = await request<BackendWaiter>('/waiters', {
         method: 'POST',
         body: JSON.stringify({
@@ -602,7 +616,7 @@ export const api = {
       return mapWaiter(created);
     },
 
-    update: async (id: string, data: Partial<Waiter>): Promise<Waiter> => {
+    update: async (id: string, data: WaiterUpdateInput): Promise<Waiter> => {
       const payload: Record<string, unknown> = {};
 
       if (data.name !== undefined) payload.fullName = data.name;

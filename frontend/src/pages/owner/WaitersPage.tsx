@@ -9,36 +9,19 @@ import { toast } from '../../components/ui/Toast';
 import { Plus, Edit2, Trash2, Users, User, Phone, Send } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Waiter } from '../../lib/types';
-import { clsx } from 'clsx';
 interface WaitersPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
-const shiftStatusConfig: Record<
-  string,
-  {
-    label: string;
-    variant: 'success' | 'warning' | 'danger' | 'default';
-  }> =
-{
-  active: {
-    label: 'Faol',
-    variant: 'success'
-  },
-  ended: {
-    label: 'Tugagan',
-    variant: 'default'
-  },
-  not_started: {
-    label: 'Boshlanmagan',
-    variant: 'warning'
-  }
-};
 const shiftBadge = (s: Waiter['shiftStatus']) => {
   if (s === 'active') return <Badge variant="success">Smenada</Badge>;
   if (s === 'ended') return <Badge variant="warning">Smena tugagan</Badge>;
   return <Badge variant="secondary">Boshlanmagan</Badge>;
 };
+
+const getErrorMessage = (error: unknown) =>
+error instanceof Error ? error.message : 'Xatolik yuz berdi. Qayta urinib ko';
+
 export function WaitersPage({
   activeBranchId,
   activeBranchName
@@ -59,8 +42,15 @@ export function WaitersPage({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => {
     setLoading(true);
-    api.waiters.listByBranch(activeBranchId).then((d) => {
+    api.waiters.listByBranch(activeBranchId).
+    then((d) => {
       setWaiters(d);
+    }).
+    catch((error: unknown) => {
+      setWaiters([]);
+      toast.error(getErrorMessage(error));
+    }).
+    finally(() => {
       setLoading(false);
     });
   };
@@ -104,17 +94,13 @@ export function WaitersPage({
         await api.waiters.update(editing.id, form);
         toast.success('Ofitsant yangilandi');
       } else {
-        await api.waiters.create({
-          ...form,
-          branchId: activeBranchId,
-          shiftStatus: 'not_started'
-        });
+        await api.waiters.create(form);
         toast.success("Ofitsant qo'shildi");
       }
       setModalOpen(false);
       load();
-    } catch {
-      toast.error();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -127,8 +113,8 @@ export function WaitersPage({
       toast.deleted("Ofitsant o'chirildi");
       setDeleteTarget(null);
       load();
-    } catch {
-      toast.error();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setDeleting(false);
     }
@@ -350,8 +336,7 @@ export function WaitersPage({
               phone: e.target.value
             })
             }
-            error={errors.phone}
-            required />
+            error={errors.phone} />
 
           <Input
             label="Telegram ID"
