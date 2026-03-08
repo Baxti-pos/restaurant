@@ -332,25 +332,17 @@ export function ExpensesPage({
             Rashod qo'shish
           </h3>
           <form onSubmit={handleCreate} className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Turi <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={form.type}
-                onChange={(e) =>
-                setForm({
-                  ...form,
-                  type: e.target.value as ExpenseType
-                })
-                }
-                className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-
-                <option value="salary">Ish haqi</option>
-                <option value="market">Bozor xarajati</option>
-                <option value="other">Boshqa xarajat</option>
-              </select>
-            </div>
+            <Select
+              label="Turi"
+              value={form.type}
+              onChange={(e) =>
+              setForm({
+                ...form,
+                type: e.target.value as ExpenseType
+              })
+              }
+              options={expenseTypes}
+              required />
             <Input
               label="Nomi"
               placeholder="Xarajat nomi"
@@ -551,25 +543,17 @@ export function ExpensesPage({
         size="sm">
 
         <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Turi <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={form.type}
-              onChange={(e) =>
-              setForm({
-                ...form,
-                type: e.target.value as ExpenseType
-              })
-              }
-              className="flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-
-              <option value="salary">Ish haqi</option>
-              <option value="market">Bozor xarajati</option>
-              <option value="other">Boshqa xarajat</option>
-            </select>
-          </div>
+          <Select
+            label="Turi"
+            value={form.type}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              type: e.target.value as ExpenseType
+            })
+            }
+            options={expenseTypes}
+            required />
           <Input
             label="Nomi"
             placeholder="Xarajat nomi"

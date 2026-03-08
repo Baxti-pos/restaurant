@@ -275,24 +275,18 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
         {rangeMode === 'custom' &&
         <div className="flex items-end gap-2 w-full md:w-auto">
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-slate-500">Dan</label>
-              <input
+              <Input
+              label="Dan"
               type="date"
               value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-10 px-3 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-full" />
-
+              onChange={(e) => setCustomFrom(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1 flex-1">
-              <label className="text-xs font-medium text-slate-500">
-                Gacha
-              </label>
-              <input
+              <Input
+              label="Gacha"
               type="date"
               value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="h-10 px-3 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-full" />
-
+              onChange={(e) => setCustomTo(e.target.value)} />
             </div>
           </div>
         }
