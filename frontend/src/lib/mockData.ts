@@ -54,6 +54,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998901234567',
   telegramId: '@jasur_t',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'active',
   createdAt: '2025-01-15T08:00:00Z'
 },
@@ -64,6 +65,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998909876543',
   telegramId: '@malika_y',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'active',
   createdAt: '2025-01-20T08:00:00Z'
 },
@@ -74,6 +76,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998935554433',
   telegramId: '@bobur_r',
   isEnabled: false,
+  salesSharePercent: 8,
   shiftStatus: 'not_started',
   createdAt: '2025-02-01T08:00:00Z'
 },
@@ -84,6 +87,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998911223344',
   telegramId: '@dilnoza_h',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'ended',
   createdAt: '2025-02-10T08:00:00Z'
 },
@@ -94,6 +98,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998997778899',
   telegramId: '@sardor_m',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'active',
   createdAt: '2025-01-10T08:00:00Z'
 },
@@ -104,6 +109,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998946665544',
   telegramId: '@zulfiya_n',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'not_started',
   createdAt: '2025-01-25T08:00:00Z'
 },
@@ -114,6 +120,7 @@ export const mockWaiters: Waiter[] = [
   phone: '+998901112233',
   telegramId: '@otabek_q',
   isEnabled: true,
+  salesSharePercent: 8,
   shiftStatus: 'active',
   createdAt: '2025-02-05T08:00:00Z'
 }];

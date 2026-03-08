@@ -42,6 +42,8 @@ model User {
   phone          String?       @unique
   passwordHash   String?
   telegramUserId BigInt?       @unique
+  telegramUsername String?     @unique
+  salesSharePercent Decimal    @default(8.00) @db.Decimal(5, 2)
   role           UserRole
   isActive       Boolean       @default(true)
   branchId       String?

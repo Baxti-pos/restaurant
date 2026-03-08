@@ -56,6 +56,8 @@ interface BackendWaiter {
   fullName: string;
   phone: string | null;
   telegramUserId: string | null;
+  telegramUsername: string | null;
+  salesSharePercent: string | number;
   isActive: boolean;
   createdAt: string;
 }
@@ -160,6 +162,8 @@ interface BackendWaiterActivityRow {
   openOrdersCount: number;
   closedOrdersCount: number;
   salesTotal: number;
+  shareAmount: number;
+  salesSharePercent: number;
   itemsCount: number;
 }
 
@@ -172,6 +176,7 @@ interface WaiterCreateInput {
   phone: string;
   telegramId: string;
   isEnabled: boolean;
+  salesSharePercent: number;
 }
 
 interface WaiterUpdateInput {
@@ -179,6 +184,7 @@ interface WaiterUpdateInput {
   phone?: string;
   telegramId?: string;
   isEnabled?: boolean;
+  salesSharePercent?: number;
 }
 
 const API_BASE_URL =
@@ -305,8 +311,34 @@ const parseTelegramUserId = (value: string | null | undefined) => {
     return null;
   }
 
-  const digits = value.replace(/\D/g, '');
-  return digits || null;
+  const trimmed = value.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+};
+
+const parseTelegramUsername = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return null;
+  }
+
+  const username = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
+    return trimmed;
+  }
+
+  return `@${username}`;
 };
 
 const mapWaiter = (waiter: BackendWaiter): Waiter => ({
@@ -314,8 +346,9 @@ const mapWaiter = (waiter: BackendWaiter): Waiter => ({
   branchId: waiter.branchId ?? '',
   name: waiter.fullName,
   phone: waiter.phone ?? '',
-  telegramId: waiter.telegramUserId ?? '',
+  telegramId: waiter.telegramUsername ?? waiter.telegramUserId ?? '',
   isEnabled: waiter.isActive,
+  salesSharePercent: toNumber(waiter.salesSharePercent, 8),
   shiftStatus: waiter.isActive ? 'not_started' : 'ended',
   createdAt: waiter.createdAt
 });
@@ -609,6 +642,8 @@ export const api = {
           fullName: data.name,
           phone: data.phone || null,
           telegramUserId: parseTelegramUserId(data.telegramId),
+          telegramUsername: parseTelegramUsername(data.telegramId),
+          salesSharePercent: data.salesSharePercent,
           isActive: data.isEnabled
         })
       });
@@ -623,8 +658,12 @@ export const api = {
       if (data.phone !== undefined) payload.phone = data.phone || null;
       if (data.telegramId !== undefined) {
         payload.telegramUserId = parseTelegramUserId(data.telegramId);
+        payload.telegramUsername = parseTelegramUsername(data.telegramId);
       }
       if (data.isEnabled !== undefined) payload.isActive = data.isEnabled;
+      if (data.salesSharePercent !== undefined) {
+        payload.salesSharePercent = data.salesSharePercent;
+      }
 
       const updated = await request<BackendWaiter>(`/waiters/${id}`, {
         method: 'PATCH',
@@ -1184,6 +1223,8 @@ export const api = {
           openedOrders: row.openOrdersCount + row.closedOrdersCount,
           closedOrders,
           revenue,
+          sharePercent: toNumber(row.salesSharePercent, 8),
+          shareAmount: toNumber(row.shareAmount),
           avgCheck: closedOrders > 0 ? Math.round(revenue / closedOrders) : 0,
           itemsAdded: row.itemsCount
         };

@@ -18,6 +18,25 @@ const shiftBadge = (s: Waiter['shiftStatus']) => {
   if (s === 'ended') return <Badge variant="warning">Smena tugagan</Badge>;
   return <Badge variant="secondary">Boshlanmagan</Badge>;
 };
+const PHONE_PREFIX = '+998';
+const PHONE_PATTERN = /^\+998\d{9}$/;
+const TELEGRAM_PATTERN = /^@[A-Za-z0-9_]{5,32}$/;
+
+const normalizePhoneInput = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  const local = digits.startsWith('998') ? digits.slice(3) : digits;
+  return `${PHONE_PREFIX}${local.slice(0, 9)}`;
+};
+
+const normalizeTelegramInput = (value: string) => {
+  const compact = value.replace(/\s+/g, '');
+  if (!compact) {
+    return '';
+  }
+
+  const username = compact.replace(/^@+/, '');
+  return username ? `@${username}` : '';
+};
 
 const getErrorMessage = (error: unknown) =>
 error instanceof Error ? error.message : 'Xatolik yuz berdi. Qayta urinib ko';
@@ -35,9 +54,10 @@ export function WaitersPage({
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    phone: '',
+    phone: PHONE_PREFIX,
     telegramId: '',
-    isEnabled: true
+    isEnabled: true,
+    salesSharePercent: '8'
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => {
@@ -61,9 +81,10 @@ export function WaitersPage({
     setEditing(null);
     setForm({
       name: '',
-      phone: '',
+      phone: PHONE_PREFIX,
       telegramId: '',
-      isEnabled: true
+      isEnabled: true,
+      salesSharePercent: '8'
     });
     setErrors({});
     setModalOpen(true);
@@ -72,9 +93,10 @@ export function WaitersPage({
     setEditing(w);
     setForm({
       name: w.name,
-      phone: w.phone,
-      telegramId: w.telegramId,
-      isEnabled: w.isEnabled
+      phone: w.phone ? normalizePhoneInput(w.phone) : PHONE_PREFIX,
+      telegramId: normalizeTelegramInput(w.telegramId),
+      isEnabled: w.isEnabled,
+      salesSharePercent: String(w.salesSharePercent)
     });
     setErrors({});
     setModalOpen(true);
@@ -82,19 +104,36 @@ export function WaitersPage({
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = "Bu maydon to'ldirilishi shart";
+    if (!PHONE_PATTERN.test(form.phone)) {
+      e.phone = "Telefon +998901234567 formatida bo'lishi shart";
+    }
+    if (!TELEGRAM_PATTERN.test(form.telegramId)) {
+      e.telegramId = "Telegram username @username formatida bo'lishi shart";
+    }
+    const share = Number(form.salesSharePercent);
+    if (!Number.isFinite(share) || share < 0 || share > 100) {
+      e.salesSharePercent = "Ulush foizi 0 dan 100 gacha bo'lishi kerak";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
   const handleSave = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validate()) return;
+    const payload = {
+      name: form.name,
+      phone: normalizePhoneInput(form.phone),
+      telegramId: normalizeTelegramInput(form.telegramId),
+      isEnabled: form.isEnabled,
+      salesSharePercent: Number(form.salesSharePercent)
+    };
     setSaving(true);
     try {
       if (editing) {
-        await api.waiters.update(editing.id, form);
+        await api.waiters.update(editing.id, payload);
         toast.success('Ofitsant yangilandi');
       } else {
-        await api.waiters.create(form);
+        await api.waiters.create(payload);
         toast.success("Ofitsant qo'shildi");
       }
       setModalOpen(false);
@@ -206,6 +245,9 @@ export function WaitersPage({
                 <Badge variant="danger">Bloklangan</Badge>
                 }
                   </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ulushi: <span className="font-medium">{w.salesSharePercent}%</span>
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <button
@@ -241,6 +283,9 @@ export function WaitersPage({
                       Telegram
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Ulush
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Smena holati
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -272,6 +317,9 @@ export function WaitersPage({
                       </td>
                       <td className="px-5 py-4 text-slate-600">
                         {w.telegramId || '—'}
+                      </td>
+                      <td className="px-5 py-4 text-center text-slate-600">
+                        {w.salesSharePercent}%
                       </td>
                       <td className="px-5 py-4 text-center">
                         {shiftBadge(w.shiftStatus)}
@@ -333,21 +381,48 @@ export function WaitersPage({
             onChange={(e) =>
             setForm({
               ...form,
-              phone: e.target.value
+              phone: normalizePhoneInput(e.target.value)
             })
             }
-            error={errors.phone} />
+            onFocus={() =>
+            setForm((prev) => ({
+              ...prev,
+              phone: normalizePhoneInput(prev.phone || PHONE_PREFIX)
+            }))
+            }
+            maxLength={13}
+            error={errors.phone}
+            required />
 
           <Input
-            label="Telegram ID"
+            label="Telegram username"
             placeholder="@username"
             value={form.telegramId}
             onChange={(e) =>
             setForm({
               ...form,
-              telegramId: e.target.value
+              telegramId: normalizeTelegramInput(e.target.value)
             })
-            } />
+            }
+            error={errors.telegramId}
+            required />
+
+          <Input
+            label="Ulush foizi"
+            type="number"
+            min={0}
+            max={100}
+            step={0.01}
+            placeholder="8"
+            value={form.salesSharePercent}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              salesSharePercent: e.target.value
+            })
+            }
+            error={errors.salesSharePercent}
+            required />
 
           <div className="flex space-x-3 pt-2">
             <Button

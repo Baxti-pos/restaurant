@@ -905,6 +905,14 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                       <span className="text-slate-500">Mahsulot:</span>
                       <span className="font-medium">{w.itemsAdded}</span>
                     </div>
+                    <div className="flex justify-between pr-2 border-r border-slate-100">
+                      <span className="text-slate-500">Ulush %:</span>
+                      <span className="font-medium">{w.sharePercent}%</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span className="text-slate-500">Ulush summa:</span>
+                      <span className="font-medium">{formatCurrency(w.shareAmount)}</span>
+                    </div>
                   </div>
                 </div>
           )}
@@ -927,6 +935,12 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                     </th>
                     <th className="px-5 py-3.5 text-right font-medium">
                       Tushum
+                    </th>
+                    <th className="px-5 py-3.5 text-right font-medium">
+                      Ulush %
+                    </th>
+                    <th className="px-5 py-3.5 text-right font-medium">
+                      Ulush summa
                     </th>
                     <th className="px-5 py-3.5 text-right font-medium">
                       O'rtacha chek
@@ -955,6 +969,12 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                         </td>
                         <td className="px-5 py-4 text-right font-semibold text-indigo-600">
                           {formatCurrency(w.revenue)}
+                        </td>
+                        <td className="px-5 py-4 text-right text-slate-600">
+                          {w.sharePercent}%
+                        </td>
+                        <td className="px-5 py-4 text-right font-semibold text-emerald-600">
+                          {formatCurrency(w.shareAmount)}
                         </td>
                         <td className="px-5 py-4 text-right text-slate-600">
                           {formatCurrency(w.avgCheck)}

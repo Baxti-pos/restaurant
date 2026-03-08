@@ -29,6 +29,7 @@ export interface Waiter {
   phone: string;
   telegramId: string;
   isEnabled: boolean;
+  salesSharePercent: number;
   shiftStatus: ShiftStatus;
   createdAt: string;
 }
@@ -108,6 +109,8 @@ export interface WaiterActivity {
   openedOrders: number;
   closedOrders: number;
   revenue: number;
+  sharePercent: number;
+  shareAmount: number;
   avgCheck: number;
   itemsAdded: number;
 }

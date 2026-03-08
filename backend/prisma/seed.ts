@@ -46,11 +46,15 @@ async function main() {
       fullName: "Telegram Waiter",
       role: UserRole.WAITER,
       branchId: branch.id,
+      telegramUsername: "@telegram_waiter",
+      salesSharePercent: new Prisma.Decimal("8.00"),
       isActive: true,
     },
     create: {
       fullName: "Telegram Waiter",
       telegramUserId: BigInt(111111111),
+      telegramUsername: "@telegram_waiter",
+      salesSharePercent: new Prisma.Decimal("8.00"),
       role: UserRole.WAITER,
       branchId: branch.id,
     },
@@ -130,6 +134,8 @@ async function main() {
     branch: branch.name,
     ownerPhone: owner.phone,
     waiterTelegramUserId: waiter.telegramUserId?.toString(),
+    waiterTelegramUsername: waiter.telegramUsername,
+    waiterSalesSharePercent: waiter.salesSharePercent.toString(),
   });
 }
 
