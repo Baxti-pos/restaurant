@@ -6,7 +6,7 @@ import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { TableSkeleton } from "../../components/ui/LoadingSkeleton";
 import { toast } from "../../components/ui/Toast";
-import { Plus, Edit2, Trash2, Users, User, Phone, Send } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, User, Phone, Lock } from "lucide-react";
 import { api } from "../../lib/api";
 import { getAuth } from "../../lib/auth";
 import { hasPermission } from "../../lib/permissions";
@@ -22,22 +22,12 @@ const shiftBadge = (s: Waiter["shiftStatus"]) => {
 };
 const PHONE_PREFIX = "+998";
 const PHONE_PATTERN = /^\+998\d{9}$/;
-const TELEGRAM_PATTERN = /^@[A-Za-z0-9_]{5,32}$/;
+const PASSWORD_MIN = 4;
 
 const normalizePhoneInput = (value: string) => {
   const digits = value.replace(/\D/g, "");
   const local = digits.startsWith("998") ? digits.slice(3) : digits;
   return `${PHONE_PREFIX}${local.slice(0, 9)}`;
-};
-
-const normalizeTelegramInput = (value: string) => {
-  const compact = value.replace(/\s+/g, "");
-  if (!compact) {
-    return "";
-  }
-
-  const username = compact.replace(/^@+/, "");
-  return username ? `@${username}` : "";
 };
 
 const getErrorMessage = (error: unknown) =>
@@ -59,7 +49,7 @@ export function WaitersPage({
   const [form, setForm] = useState({
     name: "",
     phone: PHONE_PREFIX,
-    telegramId: "",
+    password: "",
     isEnabled: true,
     salesSharePercent: "8",
   });
@@ -88,7 +78,7 @@ export function WaitersPage({
     setForm({
       name: "",
       phone: PHONE_PREFIX,
-      telegramId: "",
+      password: "",
       isEnabled: true,
       salesSharePercent: "8",
     });
@@ -101,7 +91,7 @@ export function WaitersPage({
     setForm({
       name: w.name,
       phone: w.phone ? normalizePhoneInput(w.phone) : PHONE_PREFIX,
-      telegramId: normalizeTelegramInput(w.telegramId),
+      password: "",
       isEnabled: w.isEnabled,
       salesSharePercent: String(w.salesSharePercent),
     });
@@ -114,8 +104,12 @@ export function WaitersPage({
     if (!PHONE_PATTERN.test(form.phone)) {
       e.phone = "Telefon +998901234567 formatida bo'lishi shart";
     }
-    if (!TELEGRAM_PATTERN.test(form.telegramId)) {
-      e.telegramId = "Telegram username @username formatida bo'lishi shart";
+    const password = form.password.trim();
+    if (!editing && password.length < PASSWORD_MIN) {
+      e.password = `Parol kamida ${PASSWORD_MIN} ta belgidan iborat bo'lishi kerak`;
+    }
+    if (editing && password && password.length < PASSWORD_MIN) {
+      e.password = `Parol kamida ${PASSWORD_MIN} ta belgidan iborat bo'lishi kerak`;
     }
     const share = Number(form.salesSharePercent);
     if (!Number.isFinite(share) || share < 0 || share > 100) {
@@ -131,7 +125,7 @@ export function WaitersPage({
     const payload = {
       name: form.name,
       phone: normalizePhoneInput(form.phone),
-      telegramId: normalizeTelegramInput(form.telegramId),
+      ...(form.password.trim() ? { password: form.password.trim() } : {}),
       isEnabled: form.isEnabled,
       salesSharePercent: Number(form.salesSharePercent),
     };
@@ -204,7 +198,7 @@ export function WaitersPage({
       {canManageWaiters && (
         <button
           onClick={openCreate}
-          className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          className="lg:hidden fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
           aria-label="Girgitton qo'shish"
         >
           <Plus className="h-7 w-7" />
@@ -245,12 +239,6 @@ export function WaitersPage({
                       <div className="flex items-center text-xs text-slate-500">
                         <Phone className="h-3 w-3 mr-1" />
                         {w.phone}
-                      </div>
-                    )}
-                    {w.telegramId && (
-                      <div className="flex items-center text-xs text-slate-400">
-                        <Send className="h-3 w-3 mr-1" />
-                        {w.telegramId}
                       </div>
                     )}
                   </div>
@@ -300,9 +288,6 @@ export function WaitersPage({
                       Telefon
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Telegram
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Ulush
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -338,9 +323,6 @@ export function WaitersPage({
                         {w.phone || "—"}
                       </td>
                       <td className="px-5 py-4 text-slate-600">
-                        {w.telegramId || "—"}
-                      </td>
-                      <td className="px-5 py-4 text-center text-slate-600">
                         {w.salesSharePercent}%
                       </td>
                       <td className="px-5 py-4 text-center">
@@ -421,17 +403,19 @@ export function WaitersPage({
           />
 
           <Input
-            label="Telegram username"
-            placeholder="@username"
-            value={form.telegramId}
+            label={editing ? "Yangi parol (ixtiyoriy)" : "Parol"}
+            type="password"
+            placeholder={editing ? "Agar o'zgarmasa bo'sh qoldiring" : "Kamida 4 ta belgi"}
+            value={form.password}
             onChange={(e) =>
               setForm({
                 ...form,
-                telegramId: normalizeTelegramInput(e.target.value),
+                password: e.target.value,
               })
             }
-            error={errors.telegramId}
-            required
+            error={errors.password}
+            required={!editing}
+            icon={<Lock className="h-4 w-4" />}
           />
 
           <Input

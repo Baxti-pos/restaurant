@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
+  Download,
   Building2,
   Users,
   ShoppingBag,
   Receipt,
   LogOut,
-  Menu,
-  X,
   ChevronDown,
   User,
   Utensils,
@@ -18,6 +17,8 @@ import {
 import { Branch, User as UserType } from '../../lib/types';
 import { clsx } from 'clsx';
 import { hasAnyPermission, hasPermission } from '../../lib/permissions';
+import { usePwaInstall } from '../../lib/pwa';
+import { toast } from '../ui/Toast';
 interface OwnerLayoutProps {
   children: React.ReactNode;
   currentPage: string;
@@ -112,6 +113,21 @@ export function OwnerLayout({
   const [branchDropdown, setBranchDropdown] = useState(false);
   const [profileDropdown, setProfileDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isWaiter = user?.role === 'waiter';
+  const { canInstall, isStandalone, install, isIos } = usePwaInstall();
+  const showInstallAction = isWaiter && !isStandalone && (canInstall || isIos);
+
+  useEffect(() => {
+    if (isWaiter && isStandalone) {
+      document.body.classList.add('waiter-standalone');
+      return () => {
+        document.body.classList.remove('waiter-standalone');
+      };
+    }
+
+    document.body.classList.remove('waiter-standalone');
+  }, [isStandalone, isWaiter]);
+
   const handleLogout = () => {
     onLogout();
     setProfileDropdown(false);
@@ -121,6 +137,17 @@ export function OwnerLayout({
     onNavigate(page);
     setMobileMenuOpen(false);
   };
+  const handleInstall = async () => {
+    if (isIos && !canInstall) {
+      toast.info("iPhone: Safari'da Share -> Add to Home Screen orqali o'rnating");
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    await install();
+    setMobileMenuOpen(false);
+  };
+  const canSwitchBranch = user?.role === 'owner' || user?.role === 'manager';
   // Get current page label
   const canAccessPage = (page: string) => {
     if (!user) {
@@ -129,6 +156,10 @@ export function OwnerLayout({
 
     if (user.role === 'owner') {
       return true;
+    }
+
+    if (user.role === 'waiter') {
+      return page === 'tables' || page === 'orders' || page === 'profile';
     }
 
     if (user.role !== 'manager') {
@@ -151,9 +182,14 @@ export function OwnerLayout({
   navItems.find((item) => item.id === currentPage)?.label ||
   (currentPage === 'profile' ? 'Profil' : 'Baxti POS');
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
+    <div
+      className={clsx(
+        'bg-slate-50 flex',
+        isWaiter ? 'h-[100dvh] flex-col overflow-hidden' : 'min-h-screen flex-col lg:flex-row'
+      )}>
+
       {/* Mobile backdrop for sidebar (only if needed, but we removed burger) */}
-      {sidebarOpen &&
+      {!isWaiter && sidebarOpen &&
       <div
         className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden"
         onClick={() => setSidebarOpen(false)} />
@@ -161,6 +197,7 @@ export function OwnerLayout({
       }
 
       {/* Sidebar (Desktop only) */}
+      {!isWaiter &&
       <aside
         className={clsx(
           'fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 flex-col transition-transform duration-200 lg:translate-x-0 hidden lg:flex',
@@ -220,20 +257,32 @@ export function OwnerLayout({
           </button>
         </div>
       </aside>
+      }
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-64 pb-20 lg:pb-0">
+      <div
+        className={clsx(
+          'flex-1 flex flex-col min-w-0',
+          isWaiter ?
+          'pb-[calc(4.75rem+env(safe-area-inset-bottom))] h-[100dvh]' :
+          'lg:ml-64 pb-20 lg:pb-0'
+        )}>
         {/* Desktop Topbar */}
+        {!isWaiter &&
         <header className="hidden lg:flex bg-white border-b border-slate-200 sticky top-0 z-30 h-16 items-center px-6 justify-between">
           <div className="flex items-center space-x-3">
             {/* Branch switcher */}
             <div className="relative">
               <button
                 onClick={() => {
+                  if (!canSwitchBranch) return;
                   setBranchDropdown(!branchDropdown);
                   setProfileDropdown(false);
                 }}
-                className="flex items-center space-x-2 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors">
+                className={clsx(
+                  "flex items-center space-x-2 px-3 py-2 rounded-xl transition-colors",
+                  canSwitchBranch ? "hover:bg-slate-50" : "cursor-default"
+                )}>
 
                 <div className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0" />
                 <span className="text-sm font-medium text-slate-700 hidden sm:block">
@@ -242,10 +291,12 @@ export function OwnerLayout({
                 <span className="text-sm font-semibold text-slate-900 max-w-[140px] truncate">
                   {currentBranch?.name || 'Filial tanlanmagan'}
                 </span>
-                <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                {canSwitchBranch && (
+                  <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                )}
               </button>
 
-              {branchDropdown &&
+              {canSwitchBranch && branchDropdown &&
               <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
                   <p className="px-4 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Filialni almashtirish
@@ -325,9 +376,15 @@ export function OwnerLayout({
             }
           </div>
         </header>
+        }
 
         {/* Mobile Header (New POS Style) */}
-        <header className="lg:hidden bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3">
+        <header
+          className={clsx(
+            'lg:hidden bg-white border-b border-slate-200 sticky top-0 z-30 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3',
+            isWaiter && 'shadow-sm'
+          )}>
+
           <div className="flex justify-between items-center mb-1">
             <h1 className="text-lg font-bold text-slate-900">{pageTitle}</h1>
             <div className="relative">
@@ -343,7 +400,9 @@ export function OwnerLayout({
                     <p className="text-sm font-semibold text-slate-900">
                       {user?.name}
                     </p>
-                    <p className="text-xs text-slate-500">Boshqaruvchi</p>
+                    <p className="text-xs text-slate-500">
+                      {isWaiter ? 'Girgitton' : 'Boshqaruvchi'}
+                    </p>
                   </div>
                   <button
                   onClick={() => {
@@ -369,8 +428,19 @@ export function OwnerLayout({
               }
             </div>
           </div>
-          <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
-            Faol filial: {currentBranch?.name}
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
+              Faol filial: {currentBranch?.name}
+            </div>
+            {showInstallAction &&
+            <button
+              onClick={handleInstall}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white">
+
+                <Download className="h-3.5 w-3.5" />
+                <span>Ilovani o'rnatish</span>
+              </button>
+            }
           </div>
         </header>
 
@@ -385,13 +455,17 @@ export function OwnerLayout({
 
         }
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <main className={clsx('flex-1 overflow-y-auto', isWaiter ? 'p-3' : 'p-4 sm:p-6')}>
+          <div className={clsx('mx-auto', isWaiter ? 'max-w-full' : 'max-w-7xl')}>{children}</div>
         </main>
       </div>
 
       {/* Mobile Bottom Tab Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
+      <div
+        className={clsx(
+          'lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]',
+          isWaiter && 'shadow-[0_-8px_24px_rgba(15,23,42,0.08)]'
+        )}>
         <div className="flex justify-between items-center px-1">
           {filteredMobileTabs.map((tab) => {
             const Icon = tab.icon;
@@ -490,6 +564,15 @@ export function OwnerLayout({
                 <User className="h-5 w-5" />
                 <span>Profil</span>
               </button>
+              {showInstallAction &&
+              <button
+                onClick={handleInstall}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+
+                  <Download className="h-5 w-5" />
+                  <span>Ilovani o'rnatish</span>
+                </button>
+              }
               <div className="h-px bg-slate-100 my-2" />
               <button
               onClick={handleLogout}

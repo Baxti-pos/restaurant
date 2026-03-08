@@ -106,7 +106,14 @@ export const tablesService = {
                         id: true,
                         orderNumber: true,
                         totalAmount: true,
-                        openedAt: true
+                        openedAt: true,
+                        waiterId: true,
+                        waiter: {
+                            select: {
+                                id: true,
+                                fullName: true
+                            }
+                        }
                     }
                 }
             }
@@ -135,7 +142,13 @@ export const tablesService = {
                         orderNumber: true,
                         totalAmount: true,
                         openedAt: true,
-                        waiterId: true
+                        waiterId: true,
+                        waiter: {
+                            select: {
+                                id: true,
+                                fullName: true
+                            }
+                        }
                     }
                 }
             }

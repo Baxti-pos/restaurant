@@ -127,7 +127,8 @@ const ensureWaiterInBranch = async (waiterId: string, branchId: string) => {
     select: {
       id: true,
       fullName: true,
-      branchId: true
+      branchId: true,
+      salesSharePercent: true
     }
   });
 
@@ -349,6 +350,75 @@ const ensureActiveShiftForAction = async (branchId: string, waiterId: string) =>
   };
 };
 
+const parseBaseDate = (value: unknown) => {
+  if (value === undefined) {
+    return new Date();
+  }
+
+  if (typeof value !== "string") {
+    throw new MeError(400, "date yaroqsiz");
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return new Date();
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new MeError(400, "date YYYY-MM-DD formatida bo'lishi kerak");
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new MeError(400, "date yaroqsiz");
+  }
+
+  return parsed;
+};
+
+const toDayStart = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+};
+
+const toDayEnd = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value;
+};
+
+const toMonthStart = (date: Date) => {
+  const value = new Date(date);
+  value.setDate(1);
+  value.setHours(0, 0, 0, 0);
+  return value;
+};
+
+const toYearStart = (date: Date) => {
+  const value = new Date(date);
+  value.setMonth(0, 1);
+  value.setHours(0, 0, 0, 0);
+  return value;
+};
+
+const toNumber = (value: Prisma.Decimal | number | string | null | undefined) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (value instanceof Prisma.Decimal) {
+    return Number(value);
+  }
+
+  return 0;
+};
+
 export const meService = {
   async tables(waiterId: string, branchId: string) {
     try {
@@ -393,6 +463,158 @@ export const meService = {
         }
       }
     });
+  },
+
+  async categories(waiterId: string, branchId: string) {
+    await ensureWaiterInBranch(waiterId, branchId);
+
+    return prisma.category.findMany({
+      where: {
+        branchId,
+        isActive: true
+      },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        branchId: true,
+        name: true,
+        sortOrder: true,
+        isActive: true
+      }
+    });
+  },
+
+  async earnings(waiterId: string, branchId: string, query?: Record<string, unknown>) {
+    const waiter = await ensureWaiterInBranch(waiterId, branchId);
+    await resolveShiftAutoState(branchId, waiterId);
+
+    const baseDate = parseBaseDate(query?.date);
+    const dayFrom = toDayStart(baseDate);
+    const dayTo = toDayEnd(baseDate);
+    const monthFrom = toMonthStart(baseDate);
+    const yearFrom = toYearStart(baseDate);
+    const yearTo = dayTo;
+
+    const [orders, shifts] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          branchId,
+          waiterId,
+          status: "CLOSED",
+          closedAt: {
+            gte: yearFrom,
+            lte: yearTo
+          }
+        },
+        orderBy: [{ closedAt: "desc" }],
+        select: {
+          id: true,
+          totalAmount: true,
+          closedAt: true
+        }
+      }),
+      prisma.waiterShift.findMany({
+        where: {
+          branchId,
+          waiterId
+        },
+        orderBy: [{ openedAt: "desc" }],
+        take: 30,
+        select: shiftSelect
+      })
+    ]);
+
+    const sharePercent = toNumber(waiter.salesSharePercent);
+
+    const day = {
+      from: dayFrom.toISOString(),
+      to: dayTo.toISOString(),
+      closedOrdersCount: 0,
+      salesTotal: 0,
+      commissionTotal: 0
+    };
+    const month = {
+      from: monthFrom.toISOString(),
+      to: dayTo.toISOString(),
+      closedOrdersCount: 0,
+      salesTotal: 0,
+      commissionTotal: 0
+    };
+    const year = {
+      from: yearFrom.toISOString(),
+      to: yearTo.toISOString(),
+      closedOrdersCount: 0,
+      salesTotal: 0,
+      commissionTotal: 0
+    };
+
+    for (const order of orders) {
+      if (!order.closedAt) {
+        continue;
+      }
+
+      const closedAtMs = order.closedAt.getTime();
+      const amount = toNumber(order.totalAmount);
+      const commission = Number(((amount * sharePercent) / 100).toFixed(2));
+
+      year.closedOrdersCount += 1;
+      year.salesTotal += amount;
+      year.commissionTotal += commission;
+
+      if (closedAtMs >= monthFrom.getTime() && closedAtMs <= dayTo.getTime()) {
+        month.closedOrdersCount += 1;
+        month.salesTotal += amount;
+        month.commissionTotal += commission;
+      }
+
+      if (closedAtMs >= dayFrom.getTime() && closedAtMs <= dayTo.getTime()) {
+        day.closedOrdersCount += 1;
+        day.salesTotal += amount;
+        day.commissionTotal += commission;
+      }
+    }
+
+    const shiftSummary = shifts.reduce(
+      (acc, shift) => {
+        acc.startedCount += 1;
+        if (shift.closedAt) {
+          acc.endedCount += 1;
+        }
+
+        if (!acc.lastStartedAt || shift.openedAt.toISOString() > acc.lastStartedAt) {
+          acc.lastStartedAt = shift.openedAt.toISOString();
+        }
+
+        if (shift.closedAt) {
+          const closedAtIso = shift.closedAt.toISOString();
+          if (!acc.lastEndedAt || closedAtIso > acc.lastEndedAt) {
+            acc.lastEndedAt = closedAtIso;
+          }
+        }
+
+        return acc;
+      },
+      {
+        startedCount: 0,
+        endedCount: 0,
+        lastStartedAt: null as string | null,
+        lastEndedAt: null as string | null
+      }
+    );
+
+    return {
+      waiter: {
+        id: waiter.id,
+        fullName: waiter.fullName,
+        salesSharePercent: sharePercent
+      },
+      baseDate: baseDate.toISOString(),
+      day,
+      month,
+      year,
+      shifts,
+      shiftSummary
+    };
   },
 
   async shiftStatus(waiterId: string, branchId: string) {
