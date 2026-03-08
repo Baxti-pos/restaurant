@@ -313,7 +313,8 @@ export const reportsService = {
       select: {
         id: true,
         fullName: true,
-        isActive: true
+        isActive: true,
+        salesSharePercent: true
       }
     });
 
@@ -328,6 +329,8 @@ export const reportsService = {
           openOrdersCount: 0,
           itemsCount: 0,
           salesTotal: 0,
+          shareAmount: 0,
+          salesSharePercent: Number(waiter.salesSharePercent),
           paidTotal: 0,
           discountTotal: 0,
           shiftsOpenedCount: 0,
@@ -423,7 +426,9 @@ export const reportsService = {
 
       if (order.status === "CLOSED") {
         row.closedOrdersCount += 1;
-        row.salesTotal += Number(order.totalAmount);
+        const totalAmount = Number(order.totalAmount);
+        row.salesTotal += totalAmount;
+        row.shareAmount += totalAmount * (row.salesSharePercent / 100);
         row.paidTotal += Number(order.paidAmount);
         row.discountTotal += Number(order.discountAmount);
       } else if (order.status === "OPEN") {
@@ -458,9 +463,13 @@ export const reportsService = {
       }
     }
 
-    const data = Array.from(waiterMap.values()).sort((a, b) =>
-      a.fullName.localeCompare(b.fullName)
-    );
+    const data = Array.from(waiterMap.values()).
+    map((row) => ({
+      ...row,
+      salesTotal: Number(row.salesTotal.toFixed(2)),
+      shareAmount: Number(row.shareAmount.toFixed(2))
+    })).
+    sort((a, b) => a.fullName.localeCompare(b.fullName));
 
     return {
       branch,

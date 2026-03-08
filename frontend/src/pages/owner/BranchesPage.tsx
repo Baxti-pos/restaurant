@@ -250,13 +250,16 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                         </div>
                       </td>
                       <td className="px-5 py-4 text-slate-600">
+                        {b.address ?
                         <div className="flex items-center space-x-1.5">
-                          <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          <span>{b.address}</span>
-                        </div>
+                            <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            <span>{b.address}</span>
+                          </div> :
+                        <span className="text-slate-400">—</span>
+                        }
                       </td>
-                      <td className="px-5 py-4 text-slate-600">
-                        <div className="flex items-center space-x-1.5">
+                      <td className="px-5 py-4 text-slate-600 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           <span>
                             {b.shiftStart} – {b.shiftEnd}

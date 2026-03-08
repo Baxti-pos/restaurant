@@ -94,7 +94,7 @@ export const waitersController = {
             }
             const data = await waitersService.remove(ctx.ownerId, ctx.branchId, req.params.waiterId);
             return res.status(200).json({
-                message: "Waiter nofaol qilindi",
+                message: "Waiter butunlay o'chirildi",
                 data
             });
         }
