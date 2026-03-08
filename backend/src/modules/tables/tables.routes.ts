@@ -2,7 +2,11 @@ import { Router } from "express";
 import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
 import { authMiddleware } from "../../middlewares/auth.js";
 import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
-import { requireManagerPermissions, requirePermissions } from "../../middlewares/permissions.js";
+import {
+  requireManagerAnyPermissions,
+  requireManagerPermissions,
+  requirePermissions
+} from "../../middlewares/permissions.js";
 import { requireRoles } from "../../middlewares/roles.js";
 import { tablesController } from "./tables.controller.js";
 
@@ -13,14 +17,14 @@ tablesRouter.use(authMiddleware, activeBranchMiddleware, branchScopeMiddleware);
 tablesRouter.get(
   "/",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
-  requireManagerPermissions(["TABLES_VIEW"]),
+  requireManagerAnyPermissions(["TABLES_VIEW", "TABLES_MANAGE"]),
   (req, res) =>
   tablesController.list(req, res)
 );
 tablesRouter.get(
   "/:tableId",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
-  requireManagerPermissions(["TABLES_VIEW"]),
+  requireManagerAnyPermissions(["TABLES_VIEW", "TABLES_MANAGE"]),
   (req, res) =>
   tablesController.getById(req, res)
 );

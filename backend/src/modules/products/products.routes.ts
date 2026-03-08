@@ -2,7 +2,10 @@ import { Router } from "express";
 import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
 import { authMiddleware } from "../../middlewares/auth.js";
 import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
-import { requirePermissions } from "../../middlewares/permissions.js";
+import {
+  requireManagerAnyPermissions,
+  requirePermissions
+} from "../../middlewares/permissions.js";
 import { requireRoles } from "../../middlewares/roles.js";
 import { productsController } from "./products.controller.js";
 
@@ -15,10 +18,10 @@ productsRouter.use(
   branchScopeMiddleware
 );
 
-productsRouter.get("/", requirePermissions(["PRODUCTS_VIEW"]), (req, res) =>
+productsRouter.get("/", requireManagerAnyPermissions(["PRODUCTS_VIEW", "ORDERS_MANAGE"]), (req, res) =>
   productsController.list(req, res)
 );
-productsRouter.get("/:productId", requirePermissions(["PRODUCTS_VIEW"]), (req, res) =>
+productsRouter.get("/:productId", requireManagerAnyPermissions(["PRODUCTS_VIEW", "ORDERS_MANAGE"]), (req, res) =>
   productsController.getById(req, res)
 );
 productsRouter.post("/", requirePermissions(["PRODUCTS_MANAGE"]), (req, res) =>

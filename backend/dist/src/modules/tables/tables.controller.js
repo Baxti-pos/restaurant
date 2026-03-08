@@ -109,9 +109,9 @@ export const tablesController = {
                 return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
             }
             const data = await tablesService.remove(ctx.ownerScopeId, ctx.branchId, req.params.tableId);
-            emitTablesUpdated(ctx.branchId, "disabled", data.id);
+            emitTablesUpdated(ctx.branchId, "deleted", data.id);
             return res.status(200).json({
-                message: "Stol nofaol qilindi",
+                message: "Stol o'chirildi",
                 data
             });
         }

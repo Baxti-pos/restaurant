@@ -23,11 +23,15 @@ import { formatCurrency } from '../../lib/formatters';
 import { printReceipt } from '../../lib/receiptPrinter';
 import { clsx } from 'clsx';
 import { getAuth } from '../../lib/auth';
-import { hasPermission } from '../../lib/permissions';
+import { hasAnyPermission, hasPermission } from '../../lib/permissions';
 interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
+
+const getErrorMessage = (error: unknown) =>
+error instanceof Error ? error.message : "Xatolik yuz berdi. Qayta urinib ko";
+
 export function TablesPage({
   activeBranchId,
   activeBranchName
@@ -35,6 +39,7 @@ export function TablesPage({
   const auth = getAuth();
   const user = auth.user;
   const canManageTables = hasPermission(user, 'TABLES_MANAGE');
+  const canViewProducts = hasAnyPermission(user, ['PRODUCTS_VIEW', 'ORDERS_MANAGE']);
   const canEditOrderItems = hasPermission(user, 'ORDERS_EDIT');
   const canCloseOrders = hasPermission(user, 'ORDERS_CLOSE');
   const canUseAdvancedOrderActions = canEditOrderItems || canCloseOrders;
@@ -79,27 +84,35 @@ export function TablesPage({
   // ── Load tables ───────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
-    try {
-      const [tablesData, productsData, categoriesData] = await Promise.all([
+    const [tablesResult, productsResult, categoriesResult] = await Promise.allSettled([
       api.tables.listByBranch(activeBranchId),
-      api.products.listByBranch(activeBranchId),
-      api.categories.listByBranch(activeBranchId)]
-      );
+      canViewProducts ? api.products.listByBranch(activeBranchId) : Promise.resolve([]),
+      canViewProducts ? api.categories.listByBranch(activeBranchId) : Promise.resolve([])
+    ]);
 
-      setTables(tablesData);
-      setProducts(productsData.filter((product) => product.isActive));
-      setCategories(categoriesData);
-    } catch {
+    if (tablesResult.status === 'fulfilled') {
+      setTables(tablesResult.value);
+    } else {
       setTables([]);
-      setProducts([]);
-      setCategories([]);
-    } finally {
-      setLoading(false);
     }
+
+    if (productsResult.status === 'fulfilled') {
+      setProducts(productsResult.value.filter((product) => product.isActive));
+    } else {
+      setProducts([]);
+    }
+
+    if (categoriesResult.status === 'fulfilled') {
+      setCategories(categoriesResult.value);
+    } else {
+      setCategories([]);
+    }
+
+    setLoading(false);
   };
   useEffect(() => {
     void load();
-  }, [activeBranchId]);
+  }, [activeBranchId, canViewProducts]);
   // ── Table form ────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null);
@@ -137,8 +150,8 @@ export function TablesPage({
       }
       setFormOpen(false);
       load();
-    } catch {
-      toast.error();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -153,8 +166,8 @@ export function TablesPage({
       toast.deleted("Stol o'chirildi");
       setDeleteTarget(null);
       load();
-    } catch {
-      toast.error();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setDeleting(false);
     }

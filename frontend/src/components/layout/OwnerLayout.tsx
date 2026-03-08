@@ -136,7 +136,7 @@ export function OwnerLayout({
     }
 
     if (page === 'dashboard') return hasPermission(user, 'DASHBOARD_VIEW');
-    if (page === 'tables') return hasPermission(user, 'TABLES_VIEW');
+    if (page === 'tables') return hasAnyPermission(user, ['TABLES_VIEW', 'TABLES_MANAGE']);
     if (page === 'orders') return hasAnyPermission(user, ['ORDERS_VIEW', 'REPORTS_VIEW']);
     if (page === 'products') return hasPermission(user, 'PRODUCTS_VIEW');
     if (page === 'expenses') return hasPermission(user, 'EXPENSES_VIEW');

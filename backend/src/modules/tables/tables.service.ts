@@ -301,9 +301,8 @@ export const tablesService = {
       throw new TablesError(409, "Ochiq buyurtmasi bor stolni o'chirib bo'lmaydi");
     }
 
-    const table = await prisma.table.update({
+    const table = await prisma.table.delete({
       where: { id: tableId },
-      data: { status: TableStatus.DISABLED },
       select: tableSelect
     });
 
