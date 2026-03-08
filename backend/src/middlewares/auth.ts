@@ -6,6 +6,7 @@ declare global {
     interface Request {
       auth?: AppJwtPayload;
       activeBranchId?: string;
+      ownerScopeId?: string;
     }
   }
 }

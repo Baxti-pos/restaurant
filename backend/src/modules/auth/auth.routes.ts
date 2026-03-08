@@ -10,6 +10,14 @@ authRouter.post("/login", (req, res) => authController.login(req, res));
 authRouter.post(
   "/select-branch",
   authMiddleware,
-  requireRoles(["OWNER"]),
+  requireRoles(["OWNER", "MANAGER"]),
   (req, res) => authController.selectBranch(req, res)
+);
+
+authRouter.get("/me", authMiddleware, requireRoles(["OWNER", "MANAGER"]), (req, res) =>
+  authController.me(req, res)
+);
+
+authRouter.patch("/me", authMiddleware, requireRoles(["OWNER", "MANAGER"]), (req, res) =>
+  authController.updateMe(req, res)
 );

@@ -30,15 +30,15 @@ const emitTablesUpdated = (branchId: string, action: string, tableId: string) =>
 
 const getBaseContext = (req: Request) => {
   const branchId = req.activeBranchId;
-  const auth = req.auth;
+  const ownerScopeId = req.ownerScopeId;
 
-  if (!auth || !branchId) {
+  if (!req.auth || !branchId) {
     return null;
   }
 
   return {
-    auth,
-    branchId
+    branchId,
+    ownerScopeId
   };
 };
 
@@ -80,11 +80,11 @@ export const tablesController = {
   async create(req: Request, res: Response) {
     try {
       const ctx = getBaseContext(req);
-      if (!ctx || ctx.auth.role !== "OWNER") {
+      if (!ctx?.ownerScopeId) {
         return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
       }
 
-      const data = await tablesService.create(ctx.auth.sub, ctx.branchId, req.body);
+      const data = await tablesService.create(ctx.ownerScopeId, ctx.branchId, req.body);
       emitTablesUpdated(ctx.branchId, "created", data.id);
 
       return res.status(201).json({
@@ -99,12 +99,12 @@ export const tablesController = {
   async update(req: Request, res: Response) {
     try {
       const ctx = getBaseContext(req);
-      if (!ctx || ctx.auth.role !== "OWNER") {
+      if (!ctx?.ownerScopeId) {
         return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
       }
 
       const data = await tablesService.update(
-        ctx.auth.sub,
+        ctx.ownerScopeId,
         ctx.branchId,
         req.params.tableId,
         req.body
@@ -123,11 +123,11 @@ export const tablesController = {
   async remove(req: Request, res: Response) {
     try {
       const ctx = getBaseContext(req);
-      if (!ctx || ctx.auth.role !== "OWNER") {
+      if (!ctx?.ownerScopeId) {
         return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
       }
 
-      const data = await tablesService.remove(ctx.auth.sub, ctx.branchId, req.params.tableId);
+      const data = await tablesService.remove(ctx.ownerScopeId, ctx.branchId, req.params.tableId);
       emitTablesUpdated(ctx.branchId, "disabled", data.id);
 
       return res.status(200).json({

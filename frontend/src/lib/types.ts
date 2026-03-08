@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'waiter';
+export type Role = 'owner' | 'manager' | 'waiter';
 export type TableStatus = 'empty' | 'occupied' | 'closing';
 export type OrderStatus = 'open' | 'closed';
 export type PaymentType = 'cash' | 'card' | 'transfer';
@@ -10,6 +10,16 @@ export interface User {
   name: string;
   phone: string;
   role: Role;
+  permissions: string[];
+}
+
+export interface OwnerProfile {
+  id: string;
+  fullName: string;
+  phone: string;
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Branch {
@@ -32,6 +42,22 @@ export interface Waiter {
   salesSharePercent: number;
   shiftStatus: ShiftStatus;
   createdAt: string;
+}
+
+export interface Manager {
+  id: string;
+  fullName: string;
+  phone: string;
+  permissions: string[];
+  isActive: boolean;
+  branches: {
+    id: string;
+    name: string;
+    address: string;
+    isActive: boolean;
+  }[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TableItem {
@@ -119,4 +145,5 @@ export interface AuthState {
   user: User | null;
   token: string | null;
   activeBranchId: string | null;
+  branches: Branch[];
 }

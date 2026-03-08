@@ -49,5 +49,54 @@ export const authController = {
     } catch (error) {
       return handleError(res, error);
     }
+  },
+
+  async me(req: Request, res: Response) {
+    try {
+      if (!req.auth) {
+        return res.status(401).json({
+          message: "Autorizatsiya talab qilinadi"
+        });
+      }
+
+      const result = await authService.getOwnerProfile({
+        userId: req.auth.sub,
+        role: req.auth.role,
+        activeBranchId: req.auth.activeBranchId
+      });
+
+      return res.status(200).json({
+        message: "Profil malumoti",
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
+  async updateMe(req: Request, res: Response) {
+    try {
+      if (!req.auth) {
+        return res.status(401).json({
+          message: "Autorizatsiya talab qilinadi"
+        });
+      }
+
+      const result = await authService.updateOwnerProfile(
+        {
+          userId: req.auth.sub,
+          role: req.auth.role,
+          activeBranchId: req.auth.activeBranchId
+        },
+        req.body ?? {}
+      );
+
+      return res.status(200).json({
+        message: "Profil yangilandi",
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
   }
 };

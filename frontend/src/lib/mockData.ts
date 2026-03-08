@@ -13,7 +13,8 @@ export const mockOwner: User = {
   id: 'u1',
   name: 'Alisher Karimov',
   phone: '+998901234567',
-  role: 'owner'
+  role: 'owner',
+  permissions: []
 };
 
 export const mockBranches: Branch[] = [

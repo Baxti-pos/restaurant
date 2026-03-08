@@ -12,7 +12,7 @@ const handleError = (res, error) => {
     });
 };
 const getContext = (req) => {
-    const ownerId = req.auth?.sub;
+    const ownerId = req.ownerScopeId;
     const branchId = req.activeBranchId;
     if (!ownerId || !branchId) {
         return null;

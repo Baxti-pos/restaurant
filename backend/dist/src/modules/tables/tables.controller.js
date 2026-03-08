@@ -26,13 +26,13 @@ const emitTablesUpdated = (branchId, action, tableId) => {
 };
 const getBaseContext = (req) => {
     const branchId = req.activeBranchId;
-    const auth = req.auth;
-    if (!auth || !branchId) {
+    const ownerScopeId = req.ownerScopeId;
+    if (!req.auth || !branchId) {
         return null;
     }
     return {
-        auth,
-        branchId
+        branchId,
+        ownerScopeId
     };
 };
 export const tablesController = {
@@ -71,10 +71,10 @@ export const tablesController = {
     async create(req, res) {
         try {
             const ctx = getBaseContext(req);
-            if (!ctx || ctx.auth.role !== "OWNER") {
+            if (!ctx?.ownerScopeId) {
                 return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
             }
-            const data = await tablesService.create(ctx.auth.sub, ctx.branchId, req.body);
+            const data = await tablesService.create(ctx.ownerScopeId, ctx.branchId, req.body);
             emitTablesUpdated(ctx.branchId, "created", data.id);
             return res.status(201).json({
                 message: "Stol yaratildi",
@@ -88,10 +88,10 @@ export const tablesController = {
     async update(req, res) {
         try {
             const ctx = getBaseContext(req);
-            if (!ctx || ctx.auth.role !== "OWNER") {
+            if (!ctx?.ownerScopeId) {
                 return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
             }
-            const data = await tablesService.update(ctx.auth.sub, ctx.branchId, req.params.tableId, req.body);
+            const data = await tablesService.update(ctx.ownerScopeId, ctx.branchId, req.params.tableId, req.body);
             emitTablesUpdated(ctx.branchId, "updated", data.id);
             return res.status(200).json({
                 message: "Stol yangilandi",
@@ -105,10 +105,10 @@ export const tablesController = {
     async remove(req, res) {
         try {
             const ctx = getBaseContext(req);
-            if (!ctx || ctx.auth.role !== "OWNER") {
+            if (!ctx?.ownerScopeId) {
                 return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
             }
-            const data = await tablesService.remove(ctx.auth.sub, ctx.branchId, req.params.tableId);
+            const data = await tablesService.remove(ctx.ownerScopeId, ctx.branchId, req.params.tableId);
             emitTablesUpdated(ctx.branchId, "disabled", data.id);
             return res.status(200).json({
                 message: "Stol nofaol qilindi",

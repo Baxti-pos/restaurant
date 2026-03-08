@@ -17,6 +17,7 @@ import {
 'lucide-react';
 import { Branch, User as UserType } from '../../lib/types';
 import { clsx } from 'clsx';
+import { hasAnyPermission, hasPermission } from '../../lib/permissions';
 interface OwnerLayoutProps {
   children: React.ReactNode;
   currentPage: string;
@@ -57,6 +58,11 @@ const navItems = [
   id: 'waiters',
   label: 'Girgittonlar',
   icon: Users
+},
+{
+  id: 'managers',
+  label: 'Menejerlar',
+  icon: User
 },
 {
   id: 'branches',
@@ -116,8 +122,34 @@ export function OwnerLayout({
     setMobileMenuOpen(false);
   };
   // Get current page label
+  const canAccessPage = (page: string) => {
+    if (!user) {
+      return false;
+    }
+
+    if (user.role === 'owner') {
+      return true;
+    }
+
+    if (user.role !== 'manager') {
+      return false;
+    }
+
+    if (page === 'dashboard') return hasPermission(user, 'DASHBOARD_VIEW');
+    if (page === 'tables') return hasPermission(user, 'TABLES_VIEW');
+    if (page === 'orders') return hasAnyPermission(user, ['ORDERS_VIEW', 'REPORTS_VIEW']);
+    if (page === 'products') return hasPermission(user, 'PRODUCTS_VIEW');
+    if (page === 'expenses') return hasPermission(user, 'EXPENSES_VIEW');
+    if (page === 'waiters') return hasPermission(user, 'WAITERS_VIEW');
+    if (page === 'profile') return true;
+    return false;
+  };
+
+  const filteredNavItems = navItems.filter((item) => canAccessPage(item.id));
+  const filteredMobileTabs = mobileTabs.filter((item) => canAccessPage(item.id));
   const pageTitle =
-  navItems.find((item) => item.id === currentPage)?.label || 'Baxti POS';
+  navItems.find((item) => item.id === currentPage)?.label ||
+  (currentPage === 'profile' ? 'Profil' : 'Baxti POS');
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
       {/* Mobile backdrop for sidebar (only if needed, but we removed burger) */}
@@ -147,7 +179,7 @@ export function OwnerLayout({
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const Icon = item.icon;
             const active = currentPage === item.id;
             return (
@@ -271,6 +303,16 @@ export function OwnerLayout({
                 </div>
                 <button
                 onClick={() => {
+                  onNavigate('profile');
+                  setProfileDropdown(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
+
+                  <User className="h-4 w-4" />
+                  <span>Profil</span>
+                </button>
+                <button
+                onClick={() => {
                   onLogout();
                   setProfileDropdown(false);
                 }}
@@ -303,6 +345,16 @@ export function OwnerLayout({
                     </p>
                     <p className="text-xs text-slate-500">Boshqaruvchi</p>
                   </div>
+                  <button
+                  onClick={() => {
+                    onNavigate('profile');
+                    setProfileDropdown(false);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
+
+                    <User className="h-4 w-4" />
+                    <span>Profil</span>
+                  </button>
                   <button
                   onClick={() => {
                     onLogout();
@@ -341,7 +393,7 @@ export function OwnerLayout({
       {/* Mobile Bottom Tab Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)]">
         <div className="flex justify-between items-center px-1">
-          {mobileTabs.map((tab) => {
+          {filteredMobileTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = currentPage === tab.id;
             return (
@@ -384,29 +436,59 @@ export function OwnerLayout({
           <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 lg:hidden pb-[env(safe-area-inset-bottom)] animate-in slide-in-from-bottom duration-200">
             <div className="p-4 space-y-1">
               <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+              {canAccessPage('waiters') &&
               <button
-              onClick={() => handleMobileNavigate('waiters')}
+                onClick={() => handleMobileNavigate('waiters')}
+                className={clsx(
+                  'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                  currentPage === 'waiters' ?
+                  'bg-indigo-50 text-indigo-600' :
+                  'text-slate-700 hover:bg-slate-50'
+                )}>
+
+                  <Users className="h-5 w-5" />
+                  <span>Girgittonlar</span>
+                </button>
+              }
+              {user?.role === 'owner' &&
+              <button
+                onClick={() => handleMobileNavigate('managers')}
+                className={clsx(
+                  'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                  currentPage === 'managers' ?
+                  'bg-indigo-50 text-indigo-600' :
+                  'text-slate-700 hover:bg-slate-50'
+                )}>
+
+                  <User className="h-5 w-5" />
+                  <span>Menejerlar</span>
+                </button>
+              }
+              {user?.role === 'owner' &&
+              <button
+                onClick={() => handleMobileNavigate('branches')}
+                className={clsx(
+                  'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                  currentPage === 'branches' ?
+                  'bg-indigo-50 text-indigo-600' :
+                  'text-slate-700 hover:bg-slate-50'
+                )}>
+
+                  <Building2 className="h-5 w-5" />
+                  <span>Filiallar</span>
+                </button>
+              }
+              <button
+              onClick={() => handleMobileNavigate('profile')}
               className={clsx(
                 'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                currentPage === 'waiters' ?
+                currentPage === 'profile' ?
                 'bg-indigo-50 text-indigo-600' :
                 'text-slate-700 hover:bg-slate-50'
               )}>
 
-                <Users className="h-5 w-5" />
-                <span>Girgittonlar</span>
-              </button>
-              <button
-              onClick={() => handleMobileNavigate('branches')}
-              className={clsx(
-                'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
-                currentPage === 'branches' ?
-                'bg-indigo-50 text-indigo-600' :
-                'text-slate-700 hover:bg-slate-50'
-              )}>
-
-                <Building2 className="h-5 w-5" />
-                <span>Filiallar</span>
+                <User className="h-5 w-5" />
+                <span>Profil</span>
               </button>
               <div className="h-px bg-slate-100 my-2" />
               <button
