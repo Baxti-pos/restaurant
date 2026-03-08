@@ -53,7 +53,7 @@ const canAccessPage = (user: User | null, page: Page) => {
   }
 
   if (page === 'tables') {
-    return hasPermission(user, 'TABLES_VIEW');
+    return hasAnyPermission(user, ['TABLES_VIEW', 'TABLES_MANAGE']);
   }
 
   if (page === 'orders') {
