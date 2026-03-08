@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState, Fragment } from 'react';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { StatCard } from '../../components/ui/StatCard';
+import React, { useEffect, useMemo, useState, Fragment } from "react";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { StatCard } from "../../components/ui/StatCard";
 import {
   TableSkeleton,
-  CardSkeleton } from
-'../../components/ui/LoadingSkeleton';
+  CardSkeleton,
+} from "../../components/ui/LoadingSkeleton";
 import {
   ShoppingBag,
   TrendingUp,
@@ -15,20 +15,21 @@ import {
   PackageOpen,
   TrendingDown,
   DollarSign,
-  Users } from
-'lucide-react';
-import { api } from '../../lib/api';
-import { getAuth } from '../../lib/auth';
-import { hasPermission } from '../../lib/permissions';
-import { Order, WaiterActivity } from '../../lib/types';
+  Users,
+} from "lucide-react";
+import { api } from "../../lib/api";
+import { getAuth } from "../../lib/auth";
+import { hasPermission } from "../../lib/permissions";
+import { onRealtimeEvent } from "../../lib/socket";
+import { Order, WaiterActivity } from "../../lib/types";
 import {
   formatCurrency,
   formatDateShort,
   formatDateTime,
   toLocalDateKey,
-  todayStr } from
-'../../lib/formatters';
-import { clsx } from 'clsx';
+  todayStr,
+} from "../../lib/formatters";
+import { clsx } from "clsx";
 import {
   LineChart,
   Line,
@@ -37,14 +38,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend } from
-'recharts';
+  Legend,
+} from "recharts";
 interface OrdersPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
-type Tab = 'orders' | 'daily' | 'monthly' | 'waiters';
-type RangeMode = 'today' | 'yesterday' | 'custom';
+type Tab = "orders" | "daily" | "monthly" | "waiters";
+type RangeMode = "today" | "yesterday" | "custom";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDateKey(order: Order): string {
   const src = order.closedAt || order.createdAt;
@@ -55,14 +56,26 @@ function yesterdayStr(): string {
   d.setDate(d.getDate() - 1);
   return toLocalDateKey(d);
 }
+
+function matchesActiveBranch(payload: unknown, activeBranchId: string): boolean {
+  if (!payload || typeof payload !== "object") {
+    return true;
+  }
+
+  if (!("branchId" in payload)) {
+    return true;
+  }
+
+  return (payload as { branchId?: string }).branchId === activeBranchId;
+}
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function OrdersPage({
   activeBranchId,
-  activeBranchName
+  activeBranchName,
 }: OrdersPageProps) {
   const authUser = getAuth().user;
-  const canOrdersView = hasPermission(authUser, 'ORDERS_VIEW');
-  const canReportsView = hasPermission(authUser, 'REPORTS_VIEW');
+  const canOrdersView = hasPermission(authUser, "ORDERS_VIEW");
+  const canReportsView = hasPermission(authUser, "REPORTS_VIEW");
   const availableTabs: {
     id: Tab;
     label: string;
@@ -70,29 +83,29 @@ export function OrdersPage({
 
   if (canOrdersView) {
     availableTabs.push({
-      id: 'orders',
-      label: 'Sotuvlar'
+      id: "orders",
+      label: "Sotuvlar",
     });
   }
 
   if (canReportsView) {
     availableTabs.push(
       {
-        id: 'daily',
-        label: 'Kunlik hisobot'
+        id: "daily",
+        label: "Kunlik hisobot",
       },
       {
-        id: 'monthly',
-        label: 'Oylik hisobot'
+        id: "monthly",
+        label: "Oylik hisobot",
       },
       {
-        id: 'waiters',
-        label: 'Ofitsant faoliyati'
-      }
+        id: "waiters",
+        label: "Girgitton faoliyati",
+      },
     );
   }
 
-  const initialTab = (availableTabs[0]?.id ?? 'orders') as Tab;
+  const initialTab = (availableTabs[0]?.id ?? "orders") as Tab;
   const [tab, setTab] = useState<Tab>(initialTab);
   useEffect(() => {
     if (!availableTabs.some((item) => item.id === tab)) {
@@ -106,7 +119,8 @@ export function OrdersPage({
         <p className="text-slate-500 text-sm">
           Ushbu sahifani korish uchun ruxsat yoq
         </p>
-      </div>);
+      </div>
+    );
   }
 
   const tabs: {
@@ -117,12 +131,12 @@ export function OrdersPage({
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className='hidden lg:block'>
+      <div className="hidden lg:block">
         <h1 className="text-lg md:text-xl font-bold text-slate-900">
           Sotuvlar
         </h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-          Faol filial:{' '}
+          Faol filial:{" "}
           <span className="font-medium text-indigo-600">
             {activeBranchName}
           </span>
@@ -132,29 +146,29 @@ export function OrdersPage({
       {/* Tabs */}
       <div className="border-b border-slate-200">
         <div className="flex space-x-1 overflow-x-auto no-scrollbar">
-          {tabs.map((t) =>
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={clsx(
-              'px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
-              tab === t.id ?
-              'border-indigo-600 text-indigo-600' :
-              'border-transparent text-slate-500 hover:text-slate-700'
-            )}>
-
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={clsx(
+                "px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
+                tab === t.id
+                  ? "border-indigo-600 text-indigo-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700",
+              )}
+            >
               {t.label}
             </button>
-          )}
+          ))}
         </div>
       </div>
 
-      {tab === 'orders' && <SalesTab activeBranchId={activeBranchId} />}
-      {tab === 'daily' && <DailyTab activeBranchId={activeBranchId} />}
-      {tab === 'monthly' && <MonthlyTab activeBranchId={activeBranchId} />}
-      {tab === 'waiters' && <WaitersTab activeBranchId={activeBranchId} />}
-    </div>);
-
+      {tab === "orders" && <SalesTab activeBranchId={activeBranchId} />}
+      {tab === "daily" && <DailyTab activeBranchId={activeBranchId} />}
+      {tab === "monthly" && <MonthlyTab activeBranchId={activeBranchId} />}
+      {tab === "waiters" && <WaitersTab activeBranchId={activeBranchId} />}
+    </div>
+  );
 }
 // ─── Tab 1: Sales Summary ─────────────────────────────────────────────────────
 interface DayGroup {
@@ -163,10 +177,10 @@ interface DayGroup {
   totalQty: number;
   totalRevenue: number;
 }
-function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
-  const [rangeMode, setRangeMode] = useState<RangeMode>('today');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+function SalesTab({ activeBranchId }: { activeBranchId: string }) {
+  const [rangeMode, setRangeMode] = useState<RangeMode>("today");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
@@ -176,42 +190,62 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
     setLoading(true);
     setPage(1);
     setExpandedDates(new Set());
-    let from = '';
-    let to = '';
-    if (rangeMode === 'today') {
+    let from = "";
+    let to = "";
+    if (rangeMode === "today") {
       from = todayStr();
       to = todayStr();
-    } else if (rangeMode === 'yesterday') {
+    } else if (rangeMode === "yesterday") {
       from = yesterdayStr();
       to = yesterdayStr();
     } else {
       from = customFrom;
       to = customTo;
     }
-    api.orders.
-    listByBranch(activeBranchId, {
-      status: 'closed',
-      from,
-      to
-    }).
-    then((data) => {
-      setOrders(data);
-    }).
-    catch(() => {
-      setOrders([]);
-    }).
-    finally(() => {
-      setLoading(false);
-    });
+    api.orders
+      .listByBranch(activeBranchId, {
+        status: "closed",
+        from,
+        to,
+      })
+      .then((data) => {
+        setOrders(data);
+      })
+      .catch(() => {
+        setOrders([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   useEffect(() => {
     fetchData();
     const interval = window.setInterval(fetchData, 10000);
     return () => window.clearInterval(interval);
   }, [activeBranchId, rangeMode, customFrom, customTo]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      fetchData();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, rangeMode, customFrom, customTo]);
   // Group closed orders by day
   const dayGroups = useMemo<DayGroup[]>(() => {
-    const closed = orders.filter((o) => o.status === 'closed');
+    const closed = orders.filter((o) => o.status === "closed");
     const map = new Map<string, Order[]>();
     for (const o of closed) {
       const key = getDateKey(o);
@@ -222,14 +256,14 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
     for (const [dateKey, dayOrders] of map.entries()) {
       const totalQty = dayOrders.reduce(
         (s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0),
-        0
+        0,
       );
       const totalRevenue = dayOrders.reduce((s, o) => s + o.total, 0);
       groups.push({
         dateKey,
         orders: dayOrders,
         totalQty,
-        totalRevenue
+        totalRevenue,
       });
     }
     return groups.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
@@ -237,17 +271,17 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
   // Summary totals
   const totalQty = dayGroups.reduce((s, g) => s + g.totalQty, 0);
   const totalRevenue = dayGroups.reduce((s, g) => s + g.totalRevenue, 0);
-  const totalClosedOrders = orders.filter((o) => o.status === 'closed').length;
+  const totalClosedOrders = orders.filter((o) => o.status === "closed").length;
   const avgCheck =
-  totalClosedOrders > 0 ? Math.round(totalRevenue / totalClosedOrders) : 0;
+    totalClosedOrders > 0 ? Math.round(totalRevenue / totalClosedOrders) : 0;
   // Pagination
   const totalPages = Math.ceil(dayGroups.length / PAGE_SIZE);
   const pagedGroups = dayGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const toggleExpand = (dateKey: string) => {
     setExpandedDates((prev) => {
       const next = new Set(prev);
-      if (next.has(dateKey)) next.delete(dateKey);else
-      next.add(dateKey);
+      if (next.has(dateKey)) next.delete(dateKey);
+      else next.add(dateKey);
       return next;
     });
   };
@@ -259,8 +293,8 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
         name: string;
         qty: number;
         total: number;
-      }>(
-    );
+      }
+    >();
     for (const o of group.orders) {
       for (const item of o.items) {
         const existing = map.get(item.productName);
@@ -271,7 +305,7 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
           map.set(item.productName, {
             name: item.productName,
             qty: item.quantity,
-            total: item.quantity * item.price
+            total: item.quantity * item.price,
           });
         }
       }
@@ -283,115 +317,120 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
       {/* Filters */}
       <div className="flex flex-col md:flex-row md:items-end gap-3">
         <div className="flex rounded-xl border border-slate-200 overflow-hidden bg-white w-full md:w-auto">
-          {(['today', 'yesterday', 'custom'] as RangeMode[]).map((mode) => {
+          {(["today", "yesterday", "custom"] as RangeMode[]).map((mode) => {
             const labels: Record<RangeMode, string> = {
-              today: 'Bugun',
-              yesterday: 'Kecha',
-              custom: 'Dan–gacha'
+              today: "Bugun",
+              yesterday: "Kecha",
+              custom: "Dan–gacha",
             };
             return (
               <button
                 key={mode}
                 onClick={() => setRangeMode(mode)}
                 className={clsx(
-                  'flex-1 md:flex-none px-4 py-2 text-sm font-medium transition-colors',
-                  rangeMode === mode ?
-                  'bg-indigo-600 text-white' :
-                  'text-slate-600 hover:bg-slate-50'
-                )}>
-
+                  "flex-1 md:flex-none px-4 py-2 text-sm font-medium transition-colors",
+                  rangeMode === mode
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-600 hover:bg-slate-50",
+                )}
+              >
                 {labels[mode]}
-              </button>);
-
+              </button>
+            );
           })}
         </div>
 
-        {rangeMode === 'custom' &&
-        <div className="flex items-end gap-2 w-full md:w-auto">
+        {rangeMode === "custom" && (
+          <div className="flex items-end gap-2 w-full md:w-auto">
             <div className="flex flex-col gap-1 flex-1">
               <Input
-              label="Dan"
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)} />
+                label="Dan"
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+              />
             </div>
             <div className="flex flex-col gap-1 flex-1">
               <Input
-              label="Gacha"
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)} />
+                label="Gacha"
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+              />
             </div>
           </div>
-        }
+        )}
 
         <Button
           onClick={fetchData}
           variant="primary"
-          className="w-full md:w-auto">
-
+          className="w-full md:w-auto"
+        >
           Ko'rsatish
         </Button>
       </div>
 
       {/* Summary Cards */}
-      {loading ?
-      <CardSkeleton count={4} /> :
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {loading ? (
+        <CardSkeleton count={4} />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
-          title="Sotilgan mahsulotlar soni"
-          value={`${totalQty} ta`}
-          icon={ShoppingBag}
-          color="indigo" />
-
-          <StatCard
-          title="Umumiy tushum"
-          value={formatCurrency(totalRevenue)}
-          icon={TrendingUp}
-          color="green" />
+            title="Sotilgan mahsulotlar soni"
+            value={`${totalQty} ta`}
+            icon={ShoppingBag}
+            color="indigo"
+          />
 
           <StatCard
-          title="Yopilgan buyurtmalar"
-          value={`${totalClosedOrders} ta`}
-          icon={CheckCircle}
-          color="amber" />
+            title="Umumiy tushum"
+            value={formatCurrency(totalRevenue)}
+            icon={TrendingUp}
+            color="green"
+          />
 
           <StatCard
-          title="O'rtacha chek"
-          value={formatCurrency(avgCheck)}
-          icon={Receipt}
-          color="red" />
+            title="Yopilgan buyurtmalar"
+            value={`${totalClosedOrders} ta`}
+            icon={CheckCircle}
+            color="amber"
+          />
 
+          <StatCard
+            title="O'rtacha chek"
+            value={formatCurrency(avgCheck)}
+            icon={Receipt}
+            color="red"
+          />
         </div>
-      }
+      )}
 
       {/* Table / List */}
-      {loading ?
-      <TableSkeleton /> :
-      dayGroups.length === 0 ?
-      <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+      {loading ? (
+        <TableSkeleton />
+      ) : dayGroups.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
           <PackageOpen className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm">
             Tanlangan davr bo'yicha sotuvlar topilmadi.
           </p>
-        </div> :
-
-      <>
+        </div>
+      ) : (
+        <>
           {/* Mobile Card List */}
           <div className="md:hidden space-y-3">
             {pagedGroups.map((group) => {
-            const isExpanded = expandedDates.has(group.dateKey);
-            const products = getProductBreakdown(group);
-            return (
-              <div
-                key={group.dateKey}
-                className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-
+              const isExpanded = expandedDates.has(group.dateKey);
+              const products = getProductBreakdown(group);
+              return (
+                <div
+                  key={group.dateKey}
+                  className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+                >
                   <div
-                  onClick={() => toggleExpand(group.dateKey)}
-                  className="px-4 py-3.5 flex justify-between items-center cursor-pointer active:bg-slate-50">
-
+                    onClick={() => toggleExpand(group.dateKey)}
+                    className="px-4 py-3.5 flex justify-between items-center cursor-pointer active:bg-slate-50"
+                  >
                     <div>
                       <p className="font-semibold text-slate-900">
                         {formatDateShort(group.dateKey)}
@@ -406,21 +445,21 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                       </div>
                     </div>
                     <ChevronDown
-                    className={clsx(
-                      'h-5 w-5 text-slate-400 transition-transform duration-200',
-                      isExpanded && 'rotate-180'
-                    )} />
-
+                      className={clsx(
+                        "h-5 w-5 text-slate-400 transition-transform duration-200",
+                        isExpanded && "rotate-180",
+                      )}
+                    />
                   </div>
 
-                  {isExpanded &&
-                <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
+                  {isExpanded && (
+                    <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
                       <div className="space-y-2">
-                        {products.map((p) =>
-                    <div
-                      key={p.name}
-                      className="flex justify-between items-start text-sm">
-
+                        {products.map((p) => (
+                          <div
+                            key={p.name}
+                            className="flex justify-between items-start text-sm"
+                          >
                             <span className="text-slate-700 flex-1 mr-2">
                               {p.name}
                             </span>
@@ -428,19 +467,19 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                               {p.qty} ta — {formatCurrency(p.total)}
                             </span>
                           </div>
-                    )}
+                        ))}
                       </div>
                       <div className="mt-3 pt-2 border-t border-slate-200 text-right">
                         <p className="text-sm font-semibold text-indigo-700">
-                          Kun bo'yicha jami:{' '}
+                          Kun bo'yicha jami:{" "}
                           {formatCurrency(group.totalRevenue)}
                         </p>
                       </div>
                     </div>
-                }
-                </div>);
-
-          })}
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Desktop Table */}
@@ -465,14 +504,14 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                 </thead>
                 <tbody>
                   {pagedGroups.map((group) => {
-                  const isExpanded = expandedDates.has(group.dateKey);
-                  const products = getProductBreakdown(group);
-                  return (
-                    <Fragment key={group.dateKey}>
+                    const isExpanded = expandedDates.has(group.dateKey);
+                    const products = getProductBreakdown(group);
+                    return (
+                      <Fragment key={group.dateKey}>
                         <tr
-                        onClick={() => toggleExpand(group.dateKey)}
-                        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors">
-
+                          onClick={() => toggleExpand(group.dateKey)}
+                          className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                        >
                           <td className="px-5 py-3.5 font-medium text-slate-900">
                             {formatDateShort(group.dateKey)}
                           </td>
@@ -486,16 +525,16 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             <ChevronDown
-                            className={clsx(
-                              'h-4 w-4 text-slate-400 mx-auto transition-transform duration-200',
-                              isExpanded && 'rotate-180'
-                            )} />
-
+                              className={clsx(
+                                "h-4 w-4 text-slate-400 mx-auto transition-transform duration-200",
+                                isExpanded && "rotate-180",
+                              )}
+                            />
                           </td>
                         </tr>
 
-                        {isExpanded &&
-                      <tr>
+                        {isExpanded && (
+                          <tr>
                             <td colSpan={4} className="p-0">
                               <div className="bg-slate-50 border-b border-slate-200 border-l-4 border-l-indigo-400 px-6 py-4">
                                 <table className="w-full text-sm">
@@ -513,8 +552,8 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-100">
-                                    {products.map((p) =>
-                                <tr key={p.name}>
+                                    {products.map((p) => (
+                                      <tr key={p.name}>
                                         <td className="py-2 text-slate-700 font-medium">
                                           {p.name}
                                         </td>
@@ -525,18 +564,18 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                                           {formatCurrency(p.total)}
                                         </td>
                                       </tr>
-                                )}
+                                    ))}
                                   </tbody>
                                 </table>
                                 <div className="mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:justify-end gap-1 text-sm text-slate-600">
                                   <span className="sm:mr-6">
-                                    Kun bo'yicha sotilgan:{' '}
+                                    Kun bo'yicha sotilgan:{" "}
                                     <span className="font-semibold text-slate-800">
                                       {group.totalQty} ta
                                     </span>
                                   </span>
                                   <span>
-                                    Kun bo'yicha jami:{' '}
+                                    Kun bo'yicha jami:{" "}
                                     <span className="font-semibold text-indigo-700">
                                       {formatCurrency(group.totalRevenue)}
                                     </span>
@@ -545,63 +584,87 @@ function SalesTab({ activeBranchId }: {activeBranchId: string;}) {
                               </div>
                             </td>
                           </tr>
-                      }
-                      </Fragment>);
-
-                })}
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 &&
-        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white rounded-b-xl border-x border-b border-slate-200 md:border-0 md:bg-transparent">
+          {totalPages > 1 && (
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-white rounded-b-xl border-x border-b border-slate-200 md:border-0 md:bg-transparent">
               <span className="text-sm text-slate-500">
                 Sahifa {page} / {totalPages}
               </span>
               <div className="flex gap-2">
                 <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}>
-
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
                   Oldingi
                 </Button>
                 <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}>
-
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
                   Keyingi
                 </Button>
               </div>
             </div>
-        }
+          )}
         </>
-      }
-    </div>);
-
+      )}
+    </div>
+  );
 }
 // ─── Tab 2: Daily ─────────────────────────────────────────────────────────────
-function DailyTab({ activeBranchId }: {activeBranchId: string;}) {
+function DailyTab({ activeBranchId }: { activeBranchId: string }) {
   const [date, setDate] = useState(todayStr());
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const load = () => {
     setLoading(true);
-    api.reports.daily(activeBranchId, date).then((d) => {
-      setData(d);
-    }).catch(() => {
-      setData(null);
-    }).finally(() => {
-      setLoading(false);
-    });
+    api.reports
+      .daily(activeBranchId, date)
+      .then((d) => {
+        setData(d);
+      })
+      .catch(() => {
+        setData(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   useEffect(() => {
     load();
+  }, [activeBranchId, date]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
   }, [activeBranchId, date]);
   return (
     <div className="space-y-5">
@@ -611,33 +674,35 @@ function DailyTab({ activeBranchId }: {activeBranchId: string;}) {
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="w-auto"
-          label="Sana" />
-
+          label="Sana"
+        />
       </div>
-      {loading ?
-      <CardSkeleton count={3} /> :
-
-      data &&
-      <>
+      {loading ? (
+        <CardSkeleton count={3} />
+      ) : (
+        data && (
+          <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard
-            title="Tushum"
-            value={formatCurrency(data.revenue)}
-            icon={TrendingUp}
-            color="green" />
+                title="Tushum"
+                value={formatCurrency(data.revenue)}
+                icon={TrendingUp}
+                color="green"
+              />
 
               <StatCard
-            title="Rashod"
-            value={formatCurrency(data.expenses)}
-            icon={TrendingDown}
-            color="red" />
+                title="Xarajat"
+                value={formatCurrency(data.expenses)}
+                icon={TrendingDown}
+                color="red"
+              />
 
               <StatCard
-            title="Foyda"
-            value={formatCurrency(data.profit)}
-            icon={DollarSign}
-            color="indigo" />
-
+                title="Foyda"
+                value={formatCurrency(data.profit)}
+                icon={DollarSign}
+                color="indigo"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -646,72 +711,96 @@ function DailyTab({ activeBranchId }: {activeBranchId: string;}) {
                 </h3>
                 <div className="space-y-2">
                   {[
-              ['Naqd', data.cash],
-              ['Karta', data.card],
-              ["O'tkazma", data.transfer]].
-              map(([label, val]) =>
-              <div
-                key={label as string}
-                className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-
+                    ["Naqd", data.cash],
+                    ["Karta", data.card],
+                    ["O'tkazma", data.transfer],
+                  ].map(([label, val]) => (
+                    <div
+                      key={label as string}
+                      className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0"
+                    >
                       <span className="text-sm text-slate-600">{label}</span>
                       <span className="font-semibold text-slate-800">
                         {formatCurrency(val as number)}
                       </span>
                     </div>
-              )}
+                  ))}
                 </div>
               </div>
               <div className="bg-white rounded-xl border border-slate-200 p-5">
                 <h3 className="text-sm font-semibold text-slate-900 mb-3">
-                  Rashod turlari
+                  Xarajat turlari
                 </h3>
                 <div className="space-y-2">
                   {[
-              ['Oylik', data.salary],
-              ['Bozorlik', data.market],
-              ['Boshqa', data.other]].
-              map(([label, val]) =>
-              <div
-                key={label as string}
-                className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-
+                    ["Oylik", data.salary],
+                    ["Bozorlik", data.market],
+                    ["Boshqa", data.other],
+                  ].map(([label, val]) => (
+                    <div
+                      key={label as string}
+                      className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0"
+                    >
                       <span className="text-sm text-slate-600">{label}</span>
                       <span className="font-semibold text-slate-800">
                         {formatCurrency(val as number)}
                       </span>
                     </div>
-              )}
+                  ))}
                 </div>
               </div>
             </div>
           </>
-
-      }
-    </div>);
-
+        )
+      )}
+    </div>
+  );
 }
 // ─── Tab 3: Monthly ───────────────────────────────────────────────────────────
-function MonthlyTab({ activeBranchId }: {activeBranchId: string;}) {
+function MonthlyTab({ activeBranchId }: { activeBranchId: string }) {
   const now = new Date();
-  const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const [from, setFrom] = useState(firstDay);
   const [to, setTo] = useState(todayStr());
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const load = () => {
     setLoading(true);
-    api.reports.monthly(activeBranchId, from, to).then((d) => {
-      setData(d);
-    }).catch(() => {
-      setData(null);
-    }).finally(() => {
-      setLoading(false);
-    });
+    api.reports
+      .monthly(activeBranchId, from, to)
+      .then((d) => {
+        setData(d);
+      })
+      .catch(() => {
+        setData(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, from, to]);
   return (
     <div className="space-y-5">
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
@@ -721,44 +810,47 @@ function MonthlyTab({ activeBranchId }: {activeBranchId: string;}) {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="w-full md:w-40" />
+            className="w-full md:w-40"
+          />
 
           <Input
             label="Gacha"
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="w-full md:w-40" />
-
+            className="w-full md:w-40"
+          />
         </div>
         <Button onClick={load} variant="secondary">
           Ko'rish
         </Button>
       </div>
-      {loading ?
-      <div className="h-64 bg-white rounded-xl border border-slate-200 animate-pulse" /> :
-
-      data &&
-      <>
+      {loading ? (
+        <div className="h-64 bg-white rounded-xl border border-slate-200 animate-pulse" />
+      ) : (
+        data && (
+          <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard
-            title="Jami tushum"
-            value={formatCurrency(data.totals.tushum)}
-            icon={TrendingUp}
-            color="green" />
+                title="Jami tushum"
+                value={formatCurrency(data.totals.tushum)}
+                icon={TrendingUp}
+                color="green"
+              />
 
               <StatCard
-            title="Jami xarajat"
-            value={formatCurrency(data.totals.xarajat)}
-            icon={TrendingDown}
-            color="red" />
+                title="Jami xarajat"
+                value={formatCurrency(data.totals.xarajat)}
+                icon={TrendingDown}
+                color="red"
+              />
 
               <StatCard
-            title="Jami foyda"
-            value={formatCurrency(data.totals.foyda)}
-            icon={DollarSign}
-            color="indigo" />
-
+                title="Jami foyda"
+                value={formatCurrency(data.totals.foyda)}
+                icon={DollarSign}
+                color="indigo"
+              />
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h3 className="text-sm font-semibold text-slate-900 mb-4">
@@ -768,100 +860,131 @@ function MonthlyTab({ activeBranchId }: {activeBranchId: string;}) {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data.days.slice(-14)}>
                     <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#f1f5f9" />
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#f1f5f9"
+                    />
 
                     <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{
-                    fill: '#94a3b8',
-                    fontSize: 11
-                  }}
-                  tickFormatter={(v) => v.slice(5)} />
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: "#94a3b8",
+                        fontSize: 11,
+                      }}
+                      tickFormatter={(v) => v.slice(5)}
+                    />
 
                     <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{
-                    fill: '#94a3b8',
-                    fontSize: 11
-                  }}
-                  tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fill: "#94a3b8",
+                        fontSize: 11,
+                      }}
+                      tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                    />
 
                     <Tooltip
-                  contentStyle={{
-                    borderRadius: 10,
-                    border: 'none',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                    fontSize: 12
-                  }}
-                  formatter={(v: number) => formatCurrency(v)} />
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: "none",
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                        fontSize: 12,
+                      }}
+                      formatter={(v: number) => formatCurrency(v)}
+                    />
 
                     <Legend
-                  formatter={(v) =>
-                  v === 'tushum' ?
-                  'Tushum' :
-                  v === 'xarajat' ?
-                  'Rashod' :
-                  'Foyda'
-                  } />
+                      formatter={(v) =>
+                        v === "tushum"
+                          ? "Tushum"
+                          : v === "xarajat"
+                            ? "Xarajat"
+                            : "Foyda"
+                      }
+                    />
 
                     <Line
-                  type="monotone"
-                  dataKey="tushum"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={false}
-                  name="tushum" />
+                      type="monotone"
+                      dataKey="tushum"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      dot={false}
+                      name="tushum"
+                    />
 
                     <Line
-                  type="monotone"
-                  dataKey="xarajat"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  dot={false}
-                  name="xarajat" />
+                      type="monotone"
+                      dataKey="xarajat"
+                      stroke="#ef4444"
+                      strokeWidth={2}
+                      dot={false}
+                      name="xarajat"
+                    />
 
                     <Line
-                  type="monotone"
-                  dataKey="foyda"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={false}
-                  name="foyda" />
-
+                      type="monotone"
+                      dataKey="foyda"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                      name="foyda"
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </>
-
-      }
-    </div>);
-
+        )
+      )}
+    </div>
+  );
 }
 // ─── Tab 4: Waiter Activity ───────────────────────────────────────────────────
-function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
+function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
   const [from, setFrom] = useState(todayStr());
   const [to, setTo] = useState(todayStr());
   const [data, setData] = useState<WaiterActivity[]>([]);
   const [loading, setLoading] = useState(false);
   const load = () => {
     setLoading(true);
-    api.reports.waiterActivity(activeBranchId, from, to).then((d) => {
-      setData(d);
-    }).catch(() => {
-      setData([]);
-    }).finally(() => {
-      setLoading(false);
-    });
+    api.reports
+      .waiterActivity(activeBranchId, from, to)
+      .then((d) => {
+        setData(d);
+      })
+      .catch(() => {
+        setData([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, from, to]);
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
@@ -871,38 +994,39 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="w-full md:w-40" />
+            className="w-full md:w-40"
+          />
 
           <Input
             label="Gacha"
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="w-full md:w-40" />
-
+            className="w-full md:w-40"
+          />
         </div>
         <Button onClick={load} variant="secondary">
           Ko'rish
         </Button>
       </div>
-      {loading ?
-      <TableSkeleton /> :
-      data.length === 0 ?
-      <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+      {loading ? (
+        <TableSkeleton />
+      ) : data.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
           <Users className="h-10 w-10 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm">Ma'lumot topilmadi</p>
-        </div> :
-
-      <>
+        </div>
+      ) : (
+        <>
           {/* Mobile Card List */}
           <div className="md:hidden space-y-3">
-            {data.
-          sort((a, b) => b.revenue - a.revenue).
-          map((w) =>
-          <div
-            key={w.waiterId}
-            className="bg-white rounded-xl border border-slate-200 p-4">
-
+            {data
+              .sort((a, b) => b.revenue - a.revenue)
+              .map((w) => (
+                <div
+                  key={w.waiterId}
+                  className="bg-white rounded-xl border border-slate-200 p-4"
+                >
                   <div className="flex justify-between items-start mb-3">
                     <div className="font-medium text-slate-900">
                       {w.waiterName}
@@ -939,11 +1063,13 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                     </div>
                     <div className="flex justify-between pl-2">
                       <span className="text-slate-500">Ulush summa:</span>
-                      <span className="font-medium">{formatCurrency(w.shareAmount)}</span>
+                      <span className="font-medium">
+                        {formatCurrency(w.shareAmount)}
+                      </span>
                     </div>
                   </div>
                 </div>
-          )}
+              ))}
           </div>
 
           {/* Desktop Table */}
@@ -953,7 +1079,7 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                 <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
                   <tr>
                     <th className="px-5 py-3.5 text-left font-medium">
-                      Ofitsant
+                      Girgitton
                     </th>
                     <th className="px-5 py-3.5 text-center font-medium">
                       Ochgan
@@ -979,13 +1105,13 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {data.
-                sort((a, b) => b.revenue - a.revenue).
-                map((w) =>
-                <tr
-                  key={w.waiterId}
-                  className="hover:bg-slate-50 transition-colors">
-
+                  {data
+                    .sort((a, b) => b.revenue - a.revenue)
+                    .map((w) => (
+                      <tr
+                        key={w.waiterId}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
                         <td className="px-5 py-4 font-medium text-slate-900">
                           {w.waiterName}
                         </td>
@@ -1011,13 +1137,13 @@ function WaitersTab({ activeBranchId }: {activeBranchId: string;}) {
                           {w.itemsAdded}
                         </td>
                       </tr>
-                )}
+                    ))}
                 </tbody>
               </table>
             </div>
           </div>
         </>
-      }
-    </div>);
-
+      )}
+    </div>
+  );
 }

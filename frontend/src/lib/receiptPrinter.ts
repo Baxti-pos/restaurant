@@ -1,5 +1,5 @@
-import { OrderItem, PaymentType } from './types';
-import { formatCurrency } from './formatters';
+import { OrderItem, PaymentType } from "./types";
+import { formatCurrency } from "./formatters";
 
 interface ReceiptPrintInput {
   branchName: string;
@@ -13,41 +13,41 @@ interface ReceiptPrintInput {
 }
 
 const escapeHtml = (value: string) =>
-value.
-replace(/&/g, '&amp;').
-replace(/</g, '&lt;').
-replace(/>/g, '&gt;').
-replace(/"/g, '&quot;').
-replace(/'/g, '&#39;');
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const paymentTypeLabel = (type: PaymentType) => {
-  if (type === 'cash') return 'Naqd';
-  if (type === 'card') return 'Karta';
+  if (type === "cash") return "Naqd";
+  if (type === "card") return "Karta";
   return "O'tkazma";
 };
 
 const formatDateTime = (iso?: string) => {
   const date = iso ? new Date(iso) : new Date();
   if (Number.isNaN(date.getTime())) {
-    return new Date().toLocaleString('uz-UZ');
+    return new Date().toLocaleString("uz-UZ");
   }
 
-  return date.toLocaleString('uz-UZ');
+  return date.toLocaleString("uz-UZ");
 };
 
 const buildReceiptHtml = (input: ReceiptPrintInput) => {
-  const itemsHtml = input.items.
-  map((item) => {
-    const lineTotal = item.quantity * item.price;
-    return `
+  const itemsHtml = input.items
+    .map((item) => {
+      const lineTotal = item.quantity * item.price;
+      return `
       <tr>
         <td class="name">${escapeHtml(item.productName)}</td>
         <td class="qty">${item.quantity}</td>
         <td class="sum">${escapeHtml(formatCurrency(lineTotal))}</td>
       </tr>
     `;
-  }).
-  join('');
+    })
+    .join("");
 
   return `
 <!doctype html>
@@ -136,7 +136,7 @@ const buildReceiptHtml = (input: ReceiptPrintInput) => {
 
     <div>Buyurtma: ${escapeHtml(input.orderId.slice(-8).toUpperCase())}</div>
     <div>Stol: ${escapeHtml(input.tableName)}</div>
-    <div>Ofitsant: ${escapeHtml(input.waiterName || "Noma'lum")}</div>
+    <div>Girgitton: ${escapeHtml(input.waiterName || "Noma'lum")}</div>
     <div>Sana: ${escapeHtml(formatDateTime(input.paidAtIso))}</div>
     <div>To'lov: ${escapeHtml(paymentTypeLabel(input.paymentType))}</div>
 
@@ -159,18 +159,18 @@ const buildReceiptHtml = (input: ReceiptPrintInput) => {
 };
 
 export const printReceipt = async (input: ReceiptPrintInput) => {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return;
   }
 
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.setAttribute('aria-hidden', 'true');
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.setAttribute("aria-hidden", "true");
 
   document.body.appendChild(iframe);
 
@@ -179,7 +179,7 @@ export const printReceipt = async (input: ReceiptPrintInput) => {
     const frameDocument = frameWindow?.document;
 
     if (!frameWindow || !frameDocument) {
-      throw new Error('Print oynasi ochilmadi');
+      throw new Error("Print oynasi ochilmadi");
     }
 
     frameDocument.open();
@@ -187,7 +187,7 @@ export const printReceipt = async (input: ReceiptPrintInput) => {
     frameDocument.close();
 
     await new Promise<void>((resolve) => {
-      if (frameDocument.readyState === 'complete') {
+      if (frameDocument.readyState === "complete") {
         resolve();
         return;
       }

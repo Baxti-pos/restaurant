@@ -43,7 +43,7 @@ async function main() {
   const waiter = await prisma.user.upsert({
     where: { telegramUserId: BigInt(111111111) },
     update: {
-      fullName: "Telegram Waiter",
+      fullName: "Telegram Girgitton",
       role: UserRole.WAITER,
       branchId: branch.id,
       telegramUsername: "@telegram_waiter",
@@ -51,7 +51,7 @@ async function main() {
       isActive: true,
     },
     create: {
-      fullName: "Telegram Waiter",
+      fullName: "Telegram Girgitton",
       telegramUserId: BigInt(111111111),
       telegramUsername: "@telegram_waiter",
       salesSharePercent: new Prisma.Decimal("8.00"),

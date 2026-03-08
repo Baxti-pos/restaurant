@@ -1,54 +1,54 @@
-import React, { useEffect, useState } from 'react';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Badge } from '../../components/ui/Badge';
-import { Modal } from '../../components/ui/Modal';
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
-import { toast } from '../../components/ui/Toast';
-import { Plus, Edit2, Trash2, Users, User, Phone, Send } from 'lucide-react';
-import { api } from '../../lib/api';
-import { getAuth } from '../../lib/auth';
-import { hasPermission } from '../../lib/permissions';
-import { Waiter } from '../../lib/types';
+import React, { useEffect, useState } from "react";
+import { Button } from "../../components/ui/Button";
+import { Input } from "../../components/ui/Input";
+import { Badge } from "../../components/ui/Badge";
+import { Modal } from "../../components/ui/Modal";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { TableSkeleton } from "../../components/ui/LoadingSkeleton";
+import { toast } from "../../components/ui/Toast";
+import { Plus, Edit2, Trash2, Users, User, Phone, Send } from "lucide-react";
+import { api } from "../../lib/api";
+import { getAuth } from "../../lib/auth";
+import { hasPermission } from "../../lib/permissions";
+import { Waiter } from "../../lib/types";
 interface WaitersPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
-const shiftBadge = (s: Waiter['shiftStatus']) => {
-  if (s === 'active') return <Badge variant="success">Smenada</Badge>;
-  if (s === 'ended') return <Badge variant="warning">Smena tugagan</Badge>;
+const shiftBadge = (s: Waiter["shiftStatus"]) => {
+  if (s === "active") return <Badge variant="success">Smenada</Badge>;
+  if (s === "ended") return <Badge variant="warning">Smena tugagan</Badge>;
   return <Badge variant="secondary">Boshlanmagan</Badge>;
 };
-const PHONE_PREFIX = '+998';
+const PHONE_PREFIX = "+998";
 const PHONE_PATTERN = /^\+998\d{9}$/;
 const TELEGRAM_PATTERN = /^@[A-Za-z0-9_]{5,32}$/;
 
 const normalizePhoneInput = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  const local = digits.startsWith('998') ? digits.slice(3) : digits;
+  const digits = value.replace(/\D/g, "");
+  const local = digits.startsWith("998") ? digits.slice(3) : digits;
   return `${PHONE_PREFIX}${local.slice(0, 9)}`;
 };
 
 const normalizeTelegramInput = (value: string) => {
-  const compact = value.replace(/\s+/g, '');
+  const compact = value.replace(/\s+/g, "");
   if (!compact) {
-    return '';
+    return "";
   }
 
-  const username = compact.replace(/^@+/, '');
-  return username ? `@${username}` : '';
+  const username = compact.replace(/^@+/, "");
+  return username ? `@${username}` : "";
 };
 
 const getErrorMessage = (error: unknown) =>
-error instanceof Error ? error.message : 'Xatolik yuz berdi. Qayta urinib ko';
+  error instanceof Error ? error.message : "Xatolik yuz berdi. Qayta urinib ko";
 
 export function WaitersPage({
   activeBranchId,
-  activeBranchName
+  activeBranchName,
 }: WaitersPageProps) {
   const authUser = getAuth().user;
-  const canManageWaiters = hasPermission(authUser, 'WAITERS_MANAGE');
+  const canManageWaiters = hasPermission(authUser, "WAITERS_MANAGE");
   const [waiters, setWaiters] = useState<Waiter[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,26 +57,27 @@ export function WaitersPage({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({
-    name: '',
+    name: "",
     phone: PHONE_PREFIX,
-    telegramId: '',
+    telegramId: "",
     isEnabled: true,
-    salesSharePercent: '8'
+    salesSharePercent: "8",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => {
     setLoading(true);
-    api.waiters.listByBranch(activeBranchId).
-    then((d) => {
-      setWaiters(d);
-    }).
-    catch((error: unknown) => {
-      setWaiters([]);
-      toast.error(getErrorMessage(error));
-    }).
-    finally(() => {
-      setLoading(false);
-    });
+    api.waiters
+      .listByBranch(activeBranchId)
+      .then((d) => {
+        setWaiters(d);
+      })
+      .catch((error: unknown) => {
+        setWaiters([]);
+        toast.error(getErrorMessage(error));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
   useEffect(() => {
     load();
@@ -85,11 +86,11 @@ export function WaitersPage({
     if (!canManageWaiters) return;
     setEditing(null);
     setForm({
-      name: '',
+      name: "",
       phone: PHONE_PREFIX,
-      telegramId: '',
+      telegramId: "",
       isEnabled: true,
-      salesSharePercent: '8'
+      salesSharePercent: "8",
     });
     setErrors({});
     setModalOpen(true);
@@ -102,7 +103,7 @@ export function WaitersPage({
       phone: w.phone ? normalizePhoneInput(w.phone) : PHONE_PREFIX,
       telegramId: normalizeTelegramInput(w.telegramId),
       isEnabled: w.isEnabled,
-      salesSharePercent: String(w.salesSharePercent)
+      salesSharePercent: String(w.salesSharePercent),
     });
     setErrors({});
     setModalOpen(true);
@@ -132,16 +133,16 @@ export function WaitersPage({
       phone: normalizePhoneInput(form.phone),
       telegramId: normalizeTelegramInput(form.telegramId),
       isEnabled: form.isEnabled,
-      salesSharePercent: Number(form.salesSharePercent)
+      salesSharePercent: Number(form.salesSharePercent),
     };
     setSaving(true);
     try {
       if (editing) {
         await api.waiters.update(editing.id, payload);
-        toast.success('Ofitsant yangilandi');
+        toast.success("Girgitton yangilandi");
       } else {
         await api.waiters.create(payload);
-        toast.success("Ofitsant qo'shildi");
+        toast.success("Girgitton qo'shildi");
       }
       setModalOpen(false);
       load();
@@ -157,7 +158,7 @@ export function WaitersPage({
     setDeleting(true);
     try {
       await api.waiters.delete(deleteTarget.id);
-      toast.deleted("Ofitsant o'chirildi");
+      toast.deleted("Girgitton o'chirildi");
       setDeleteTarget(null);
       load();
     } catch (error: unknown) {
@@ -169,120 +170,121 @@ export function WaitersPage({
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-end lg:justify-between">
-        <div className='hidden lg:block'>
+        <div className="hidden lg:block">
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
-            Ofitsantlar
+            Girgittonlar
           </h1>
           <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-            Faol filial:{' '}
+            Faol filial:{" "}
             <span className="font-medium text-indigo-600">
               {activeBranchName}
             </span>
           </p>
         </div>
         {/* Mobile: Icon Button */}
-        {canManageWaiters &&
-        <div className="md:hidden">
-          <Button size="icon" onClick={openCreate}>
-            <Plus className="h-5 w-5" />
-          </Button>
-        </div>
-        }
+        {canManageWaiters && (
+          <div className="md:hidden">
+            <Button size="icon" onClick={openCreate}>
+              <Plus className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
         {/* Desktop: Full Button */}
-        {canManageWaiters &&
-        <div className="hidden md:block">
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Ofitsant qo'shish
-          </Button>
-        </div>
-        }
+        {canManageWaiters && (
+          <div className="hidden md:block">
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Girgitton qo'shish
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Mobile FAB */}
-      {canManageWaiters &&
-      <button
-        onClick={openCreate}
-        className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-        aria-label="Ofitsant qo'shish">
+      {canManageWaiters && (
+        <button
+          onClick={openCreate}
+          className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+          aria-label="Girgitton qo'shish"
+        >
+          <Plus className="h-7 w-7" />
+        </button>
+      )}
 
-        <Plus className="h-7 w-7" />
-      </button>
-      }
-
-      {loading ?
-      <TableSkeleton /> :
-      waiters.length === 0 ?
-      <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+      {loading ? (
+        <TableSkeleton />
+      ) : waiters.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
           <Users className="h-12 w-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 text-sm">
-            Bu filialda hali ofitsantlar yo'q
+            Bu filialda hali Girgittonlar yo'q
           </p>
-          {canManageWaiters &&
-          <Button className="mt-4" onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Ofitsant qo'shish
-          </Button>
-          }
-        </div> :
-
-      <>
+          {canManageWaiters && (
+            <Button className="mt-4" onClick={openCreate}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Girgitton qo'shish
+            </Button>
+          )}
+        </div>
+      ) : (
+        <>
           {/* Mobile List Cards */}
           <div className="md:hidden space-y-2">
-            {waiters.map((w) =>
-          <div
-            key={w.id}
-            className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3">
-
+            {waiters.map((w) => (
+              <div
+                key={w.id}
+                className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3"
+              >
                 <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                   <User className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-slate-900 text-sm">{w.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {w.phone &&
-                <div className="flex items-center text-xs text-slate-500">
+                    {w.phone && (
+                      <div className="flex items-center text-xs text-slate-500">
                         <Phone className="h-3 w-3 mr-1" />
                         {w.phone}
                       </div>
-                }
-                    {w.telegramId &&
-                <div className="flex items-center text-xs text-slate-400">
+                    )}
+                    {w.telegramId && (
+                      <div className="flex items-center text-xs text-slate-400">
                         <Send className="h-3 w-3 mr-1" />
                         {w.telegramId}
                       </div>
-                }
+                    )}
                   </div>
                   <div className="flex gap-1 mt-1.5">
                     {shiftBadge(w.shiftStatus)}
-                    {w.isEnabled ?
-                <Badge variant="success">Faol</Badge> :
-
-                <Badge variant="danger">Bloklangan</Badge>
-                }
+                    {w.isEnabled ? (
+                      <Badge variant="success">Faol</Badge>
+                    ) : (
+                      <Badge variant="danger">Bloklangan</Badge>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
-                    Ulushi: <span className="font-medium">{w.salesSharePercent}%</span>
+                    Ulushi:{" "}
+                    <span className="font-medium">{w.salesSharePercent}%</span>
                   </p>
                 </div>
-                {canManageWaiters &&
-                <div className="flex flex-col gap-1">
-                  <button
-                onClick={() => openEdit(w)}
-                className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-lg">
-
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                  <button
-                onClick={() => setDeleteTarget(w)}
-                className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg">
-
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                }
+                {canManageWaiters && (
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => openEdit(w)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-lg"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(w)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
-          )}
+            ))}
           </div>
 
           {/* Desktop Table */}
@@ -309,19 +311,19 @@ export function WaitersPage({
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Holat
                     </th>
-                    {canManageWaiters &&
-                    <th className="px-5 py-3.5 text-right font-medium">
+                    {canManageWaiters && (
+                      <th className="px-5 py-3.5 text-right font-medium">
                         Amallar
                       </th>
-                    }
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {waiters.map((w) =>
-                <tr
-                  key={w.id}
-                  className="hover:bg-slate-50 transition-colors">
-
+                  {waiters.map((w) => (
+                    <tr
+                      key={w.id}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
                       <td className="px-5 py-4">
                         <div className="flex items-center space-x-3">
                           <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -333,10 +335,10 @@ export function WaitersPage({
                         </div>
                       </td>
                       <td className="px-5 py-4 text-slate-600">
-                        {w.phone || '—'}
+                        {w.phone || "—"}
                       </td>
                       <td className="px-5 py-4 text-slate-600">
-                        {w.telegramId || '—'}
+                        {w.telegramId || "—"}
                       </td>
                       <td className="px-5 py-4 text-center text-slate-600">
                         {w.salesSharePercent}%
@@ -345,89 +347,92 @@ export function WaitersPage({
                         {shiftBadge(w.shiftStatus)}
                       </td>
                       <td className="px-5 py-4 text-center">
-                        {w.isEnabled ?
-                    <Badge variant="success">Faol</Badge> :
-
-                    <Badge variant="danger">Bloklangan</Badge>
-                    }
+                        {w.isEnabled ? (
+                          <Badge variant="success">Faol</Badge>
+                        ) : (
+                          <Badge variant="danger">Bloklangan</Badge>
+                        )}
                       </td>
-                      {canManageWaiters &&
-                      <td className="px-5 py-4 text-right space-x-1">
-                        <button
-                      onClick={() => openEdit(w)}
-                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                      onClick={() => setDeleteTarget(w)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                      }
+                      {canManageWaiters && (
+                        <td className="px-5 py-4 text-right space-x-1">
+                          <button
+                            onClick={() => openEdit(w)}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(w)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
-                )}
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         </>
-      }
+      )}
 
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? 'Ofitsantni tahrirlash' : 'Yangi ofitsant'}
-        size="sm">
-
+        title={editing ? "Girgittonni tahrirlash" : "Yangi girgitton"}
+        size="sm"
+      >
         <form onSubmit={handleSave} className="space-y-4">
           <Input
             label="Ism familiya"
             placeholder="Jasur Toshmatov"
             value={form.name}
             onChange={(e) =>
-            setForm({
-              ...form,
-              name: e.target.value
-            })
+              setForm({
+                ...form,
+                name: e.target.value,
+              })
             }
             error={errors.name}
-            required />
+            required
+          />
 
           <Input
             label="Telefon raqam"
             placeholder="+998901234567"
             value={form.phone}
             onChange={(e) =>
-            setForm({
-              ...form,
-              phone: normalizePhoneInput(e.target.value)
-            })
+              setForm({
+                ...form,
+                phone: normalizePhoneInput(e.target.value),
+              })
             }
             onFocus={() =>
-            setForm((prev) => ({
-              ...prev,
-              phone: normalizePhoneInput(prev.phone || PHONE_PREFIX)
-            }))
+              setForm((prev) => ({
+                ...prev,
+                phone: normalizePhoneInput(prev.phone || PHONE_PREFIX),
+              }))
             }
             maxLength={13}
             error={errors.phone}
-            required />
+            required
+          />
 
           <Input
             label="Telegram username"
             placeholder="@username"
             value={form.telegramId}
             onChange={(e) =>
-            setForm({
-              ...form,
-              telegramId: normalizeTelegramInput(e.target.value)
-            })
+              setForm({
+                ...form,
+                telegramId: normalizeTelegramInput(e.target.value),
+              })
             }
             error={errors.telegramId}
-            required />
+            required
+          />
 
           <Input
             label="Ulush foizi"
@@ -438,21 +443,22 @@ export function WaitersPage({
             placeholder="8"
             value={form.salesSharePercent}
             onChange={(e) =>
-            setForm({
-              ...form,
-              salesSharePercent: e.target.value
-            })
+              setForm({
+                ...form,
+                salesSharePercent: e.target.value,
+              })
             }
             error={errors.salesSharePercent}
-            required />
+            required
+          />
 
           <div className="flex space-x-3 pt-2">
             <Button
               type="button"
               variant="secondary"
               className="flex-1"
-              onClick={() => setModalOpen(false)}>
-
+              onClick={() => setModalOpen(false)}
+            >
               Bekor qilish
             </Button>
             <Button type="submit" className="flex-1" isLoading={saving}>
@@ -466,10 +472,10 @@ export function WaitersPage({
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Ofitsantni o'chirish"
+        title="Girgittonni o'chirish"
         message={`"${deleteTarget?.name}" ni o'chirishni tasdiqlaysizmi?`}
-        isLoading={deleting} />
-
-    </div>);
-
+        isLoading={deleting}
+      />
+    </div>
+  );
 }

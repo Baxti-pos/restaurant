@@ -11,6 +11,7 @@ import { Plus, Edit2, Trash2, ShoppingBag, Search, Tag } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getAuth } from '../../lib/auth';
 import { hasPermission } from '../../lib/permissions';
+import { onRealtimeEvent } from '../../lib/socket';
 import { Category, Product } from '../../lib/types';
 import { formatCurrency } from '../../lib/formatters';
 import { clsx } from 'clsx';
@@ -46,8 +47,7 @@ export function ProductsPage({
   });
   const [prodErrors, setProdErrors] = useState<Record<string, string>>({});
   const [savingProd, setSavingProd] = useState(false);
-  const [deleteProd, setDeleteProd] = useState<Product | null>(null);
-  const [deletingProd, setDeletingProd] = useState(false);
+  const [togglingProdId, setTogglingProdId] = useState<string | null>(null);
   const [categoryModal, setCategoryModal] = useState({
     open: false,
     editing: null
@@ -70,6 +70,28 @@ export function ProductsPage({
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (event !== 'products.updated') {
+        return;
+      }
+
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'branchId' in payload &&
+        (payload as { branchId?: string }).branchId !== activeBranchId
+      ) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId]);
+
   const filteredProducts = products.filter((p) => {
     const matchCat = !selectedCat || p.categoryId === selectedCat;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -217,19 +239,20 @@ export function ProductsPage({
       setSavingProd(false);
     }
   };
-  const handleDeleteProd = async () => {
+  const handleToggleProdStatus = async (product: Product) => {
     if (!canManageProducts) return;
-    if (!deleteProd) return;
-    setDeletingProd(true);
+    const nextIsActive = !product.isActive;
+    setTogglingProdId(product.id);
     try {
-      await api.products.delete(deleteProd.id);
-      toast.deleted("Mahsulot o'chirildi");
-      setDeleteProd(null);
+      await api.products.update(product.id, {
+        isActive: nextIsActive
+      });
+      toast.success(nextIsActive ? 'Mahsulot faol qilindi' : 'Mahsulot nofaol qilindi');
       load();
     } catch {
       toast.error();
     } finally {
-      setDeletingProd(false);
+      setTogglingProdId(null);
     }
   };
   return (
@@ -451,10 +474,19 @@ export function ProductsPage({
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
-                    onClick={() => setDeleteProd(p)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg">
+                    type="button"
+                    onClick={() => handleToggleProdStatus(p)}
+                    disabled={togglingProdId === p.id}
+                    className={clsx(
+                      'relative h-5 w-9 rounded-full transition-colors',
+                      p.isActive ? 'bg-indigo-600' : 'bg-slate-300',
+                      togglingProdId === p.id && 'opacity-60'
+                    )}>
 
-                          <Trash2 className="h-4 w-4" />
+                          <span
+                        className={p.isActive ?
+                        'absolute top-0.5 left-[18px] h-4 w-4 rounded-full bg-white shadow transition-all' :
+                        'absolute top-0.5 left-[2px] h-4 w-4 rounded-full bg-white shadow transition-all'} />
                         </button>
                       </div>
                       }
@@ -515,6 +547,7 @@ export function ProductsPage({
                           </td>
                           {canManageProducts &&
                           <td className="px-4 py-3 text-right space-x-1">
+                            <div className="inline-flex items-center gap-1 align-middle">
                             <button
                         onClick={() => openEditProd(p)}
                         className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
@@ -522,11 +555,21 @@ export function ProductsPage({
                               <Edit2 className="h-3.5 w-3.5" />
                             </button>
                             <button
-                        onClick={() => setDeleteProd(p)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        type="button"
+                        onClick={() => handleToggleProdStatus(p)}
+                        disabled={togglingProdId === p.id}
+                        className={clsx(
+                          'relative h-5 w-9 rounded-full transition-colors align-middle',
+                          p.isActive ? 'bg-indigo-600' : 'bg-slate-300',
+                          togglingProdId === p.id && 'opacity-60'
+                        )}>
 
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <span
+                          className={p.isActive ?
+                          'absolute top-0.5 left-[18px] h-4 w-4 rounded-full bg-white shadow transition-all' :
+                          'absolute top-0.5 left-[2px] h-4 w-4 rounded-full bg-white shadow transition-all'} />
                             </button>
+                            </div>
                           </td>
                           }
                         </tr>
@@ -724,14 +767,6 @@ export function ProductsPage({
         title="Kategoriyani o'chirish"
         message={`"${deleteCat?.name}" kategoriyani o'chirishni tasdiqlaysizmi?`}
         isLoading={deletingCat} />
-
-      <ConfirmDialog
-        isOpen={!!deleteProd}
-        onClose={() => setDeleteProd(null)}
-        onConfirm={handleDeleteProd}
-        title="Mahsulotni o'chirish"
-        message={`"${deleteProd?.name}" mahsulotni o'chirishni tasdiqlaysizmi?`}
-        isLoading={deletingProd} />
 
     </div>);
 

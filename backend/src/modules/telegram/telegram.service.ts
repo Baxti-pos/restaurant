@@ -3,7 +3,7 @@ import { prisma } from "../../prisma.js";
 import { signAccessToken, type AppJwtPayload } from "../auth/auth.service.js";
 import {
   TelegramInitDataError,
-  verifyTelegramWebAppInitData
+  verifyTelegramWebAppInitData,
 } from "../../utils/telegram.js";
 
 export class TelegramAuthError extends Error {
@@ -42,7 +42,7 @@ const buildWaiterTokenPayload = (params: {
     permissions: [],
     branchId: params.branchId,
     activeBranchId: params.branchId,
-    tokenType: "access"
+    tokenType: "access",
   };
 };
 
@@ -59,7 +59,7 @@ export const telegramService = {
       verified = verifyTelegramWebAppInitData({
         initData: input.initData,
         botToken,
-        maxAgeSeconds: getMaxAgeSeconds()
+        maxAgeSeconds: getMaxAgeSeconds(),
       });
     } catch (error) {
       if (error instanceof TelegramInitDataError) {
@@ -78,18 +78,24 @@ export const telegramService = {
             id: true,
             name: true,
             address: true,
-            isActive: true
-          }
-        }
-      }
+            isActive: true,
+          },
+        },
+      },
     });
 
     if (!user) {
-      throw new TelegramAuthError(404, "Telegram waiter foydalanuvchisi topilmadi");
+      throw new TelegramAuthError(
+        404,
+        "Telegram girgitton foydalanuvchisi topilmadi",
+      );
     }
 
     if (user.role !== UserRole.WAITER) {
-      throw new TelegramAuthError(403, "Bu Telegram akkaunt waiter uchun ruxsat etilmagan");
+      throw new TelegramAuthError(
+        403,
+        "Bu Telegram akkaunt waiter uchun ruxsat etilmagan",
+      );
     }
 
     if (!user.isActive) {
@@ -97,15 +103,18 @@ export const telegramService = {
     }
 
     if (!user.branchId || !user.branch || !user.branch.isActive) {
-      throw new TelegramAuthError(403, "Waiter uchun faol filial biriktirilmagan");
+      throw new TelegramAuthError(
+        403,
+        "Waiter uchun faol filial biriktirilmagan",
+      );
     }
 
     const accessToken = signAccessToken(
       buildWaiterTokenPayload({
         userId: user.id,
         fullName: user.fullName,
-        branchId: user.branchId
-      })
+        branchId: user.branchId,
+      }),
     );
 
     return {
@@ -117,7 +126,7 @@ export const telegramService = {
         permissions: [],
         branchId: user.branchId,
         activeBranchId: user.branchId,
-        telegramUserId: user.telegramUserId?.toString() ?? null
+        telegramUserId: user.telegramUserId?.toString() ?? null,
       },
       branch: user.branch,
       telegram: {
@@ -125,8 +134,8 @@ export const telegramService = {
         username: verified.user.username ?? null,
         firstName: verified.user.first_name ?? null,
         lastName: verified.user.last_name ?? null,
-        authDate: verified.authDate
-      }
+        authDate: verified.authDate,
+      },
     };
-  }
+  },
 };

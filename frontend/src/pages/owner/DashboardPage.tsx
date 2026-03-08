@@ -30,6 +30,7 @@ import {
   Legend } from
 'recharts';
 import { api } from '../../lib/api';
+import { onRealtimeEvent } from '../../lib/socket';
 import { DashboardStats, Order } from '../../lib/types';
 import { formatCurrency, formatTime } from '../../lib/formatters';
 interface DashboardPageProps {
@@ -45,12 +46,42 @@ export function DashboardPage({
 }: DashboardPageProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
+
+  const loadStats = () => {
     setLoading(true);
     api.dashboard.getStats(activeBranchId).then((s) => {
       setStats(s);
       setLoading(false);
     });
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== 'tables.updated' &&
+        event !== 'order.updated' &&
+        event !== 'order.closed'
+      ) {
+        return;
+      }
+
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'branchId' in payload &&
+        (payload as { branchId?: string }).branchId !== activeBranchId
+      ) {
+        return;
+      }
+
+      loadStats();
+    });
+
+    return unsubscribe;
   }, [activeBranchId]);
   return (
     <div className="space-y-6">
@@ -292,7 +323,7 @@ export function DashboardPage({
                     Stol
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Ofitsant
+                    Girgitton
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Vaqt

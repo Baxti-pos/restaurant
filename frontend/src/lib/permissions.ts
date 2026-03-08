@@ -81,18 +81,18 @@ export const MANAGER_PERMISSION_OPTIONS: Array<{
   },
   {
     key: 'WAITERS_VIEW',
-    label: 'Ofitsantlarni korish',
-    description: 'Ofitsantlar royxatini korish'
+    label: 'Girgittonlarni korish',
+    description: 'Girgittonlar royxatini korish'
   },
   {
     key: 'WAITERS_MANAGE',
-    label: 'Ofitsantlarni boshqarish',
-    description: 'Ofitsant yaratish, tahrirlash va ochirish'
+    label: 'Girgittonlarni boshqarish',
+    description: 'Girgitton yaratish, tahrirlash va ochirish'
   },
   {
     key: 'REPORTS_VIEW',
     label: 'Hisobotlar',
-    description: 'Sotuv, oylik va ofitsant faoliyati hisobotlarini korish'
+    description: 'Sotuv, oylik va girgitton faoliyati hisobotlarini korish'
   }
 ];
 

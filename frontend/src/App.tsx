@@ -14,6 +14,7 @@ import { ManagersPage } from './pages/owner/ManagersPage';
 import { ToastProvider } from './components/ui/Toast';
 import { getAuth, setAuth, clearAuth } from './lib/auth';
 import { api } from './lib/api';
+import { connectRealtime, disconnectRealtime } from './lib/socket';
 import { User, Branch } from './lib/types';
 import { hasAnyPermission, hasPermission } from './lib/permissions';
 type Page =
@@ -249,6 +250,7 @@ export function App() {
   };
 
   const handleLogout = () => {
+    disconnectRealtime();
     clearAuth();
     setUser(null);
     setIsAuthenticated(false);
@@ -262,6 +264,15 @@ export function App() {
       setBranches([]);
     });
   };
+
+  useEffect(() => {
+    if (isAuthenticated && activeBranchId) {
+      connectRealtime(activeBranchId);
+      return;
+    }
+
+    disconnectRealtime();
+  }, [isAuthenticated, activeBranchId]);
 
   useEffect(() => {
     if (!user || !activeBranchId) {
