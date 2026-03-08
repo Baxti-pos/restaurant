@@ -20,6 +20,7 @@ import {
 import { api } from "../../lib/api";
 import { getAuth } from "../../lib/auth";
 import { hasPermission } from "../../lib/permissions";
+import { onRealtimeEvent } from "../../lib/socket";
 import { Order, WaiterActivity } from "../../lib/types";
 import {
   formatCurrency,
@@ -54,6 +55,18 @@ function yesterdayStr(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
   return toLocalDateKey(d);
+}
+
+function matchesActiveBranch(payload: unknown, activeBranchId: string): boolean {
+  if (!payload || typeof payload !== "object") {
+    return true;
+  }
+
+  if (!("branchId" in payload)) {
+    return true;
+  }
+
+  return (payload as { branchId?: string }).branchId === activeBranchId;
 }
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function OrdersPage({
@@ -209,6 +222,26 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
     fetchData();
     const interval = window.setInterval(fetchData, 10000);
     return () => window.clearInterval(interval);
+  }, [activeBranchId, rangeMode, customFrom, customTo]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      fetchData();
+    });
+
+    return unsubscribe;
   }, [activeBranchId, rangeMode, customFrom, customTo]);
   // Group closed orders by day
   const dayGroups = useMemo<DayGroup[]>(() => {
@@ -613,6 +646,26 @@ function DailyTab({ activeBranchId }: { activeBranchId: string }) {
   useEffect(() => {
     load();
   }, [activeBranchId, date]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, date]);
   return (
     <div className="space-y-5">
       <div className="flex items-center space-x-3">
@@ -728,6 +781,26 @@ function MonthlyTab({ activeBranchId }: { activeBranchId: string }) {
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, from, to]);
   return (
     <div className="space-y-5">
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
@@ -892,6 +965,26 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, from, to]);
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row gap-3 md:items-end">

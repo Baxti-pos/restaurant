@@ -11,6 +11,7 @@ import { Plus, Edit2, Trash2, ShoppingBag, Search, Tag } from 'lucide-react';
 import { api } from '../../lib/api';
 import { getAuth } from '../../lib/auth';
 import { hasPermission } from '../../lib/permissions';
+import { onRealtimeEvent } from '../../lib/socket';
 import { Category, Product } from '../../lib/types';
 import { formatCurrency } from '../../lib/formatters';
 import { clsx } from 'clsx';
@@ -69,6 +70,28 @@ export function ProductsPage({
   useEffect(() => {
     load();
   }, [activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (event !== 'products.updated') {
+        return;
+      }
+
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'branchId' in payload &&
+        (payload as { branchId?: string }).branchId !== activeBranchId
+      ) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId]);
+
   const filteredProducts = products.filter((p) => {
     const matchCat = !selectedCat || p.categoryId === selectedCat;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());

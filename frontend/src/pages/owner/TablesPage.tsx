@@ -24,6 +24,7 @@ import { printReceipt } from "../../lib/receiptPrinter";
 import { clsx } from "clsx";
 import { getAuth } from "../../lib/auth";
 import { hasAnyPermission, hasPermission } from "../../lib/permissions";
+import { onRealtimeEvent } from "../../lib/socket";
 interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
@@ -122,6 +123,32 @@ export function TablesPage({
   };
   useEffect(() => {
     void load();
+  }, [activeBranchId, canViewProducts]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed" &&
+        event !== "products.updated"
+      ) {
+        return;
+      }
+
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "branchId" in payload &&
+        (payload as { branchId?: string }).branchId !== activeBranchId
+      ) {
+        return;
+      }
+
+      void load();
+    });
+
+    return unsubscribe;
   }, [activeBranchId, canViewProducts]);
   // ── Table form ────────────────────────────────────────────────────────────
   const openCreate = () => {
