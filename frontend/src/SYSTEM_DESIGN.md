@@ -309,7 +309,7 @@ Four tabs:
 - Stat cards: total revenue, expenses, profit
 - Line chart: daily revenue/expenses/profit over selected range
 
-**Tab 4 — Ofitsant faoliyati**
+**Tab 4 — Girgitton faoliyati**
 - Date range picker
 - Table: per-waiter stats (orders opened/closed, revenue, avg check, items added)
 
