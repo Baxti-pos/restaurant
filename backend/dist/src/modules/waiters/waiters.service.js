@@ -1,4 +1,5 @@
 import { Prisma, UserRole } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { prisma } from "../../prisma.js";
 export class WaitersError extends Error {
     statusCode;
@@ -30,6 +31,23 @@ const parseRequiredPhoneField = (value) => {
     }
     return normalized;
 };
+const parsePasswordField = (value, options = {}) => {
+    const { required = false } = options;
+    if (value === undefined) {
+        if (required) {
+            throw new WaitersError(400, "Parol kiritilishi shart");
+        }
+        return undefined;
+    }
+    if (typeof value !== "string" || !value.trim()) {
+        throw new WaitersError(400, "Parol yaroqsiz");
+    }
+    const trimmed = value.trim();
+    if (trimmed.length < 4) {
+        throw new WaitersError(400, "Parol kamida 4 ta belgidan iborat bo'lishi kerak");
+    }
+    return trimmed;
+};
 const parseBooleanField = (value, label) => {
     if (value === undefined) {
         return undefined;
@@ -45,63 +63,6 @@ const parseRequiredBooleanField = (value, label) => {
         throw new WaitersError(400, `${label} kiritilishi shart`);
     }
     return parsed;
-};
-const parseTelegramUserIdField = (value) => {
-    if (value === undefined) {
-        return undefined;
-    }
-    if (value === null) {
-        return null;
-    }
-    if (typeof value === "bigint") {
-        return value;
-    }
-    if (typeof value === "number") {
-        if (!Number.isInteger(value) || value <= 0) {
-            throw new WaitersError(400, "telegramUserId yaroqsiz");
-        }
-        return BigInt(value);
-    }
-    if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (!trimmed) {
-            return null;
-        }
-        if (!/^\d+$/.test(trimmed)) {
-            throw new WaitersError(400, "telegramUserId yaroqsiz");
-        }
-        return BigInt(trimmed);
-    }
-    throw new WaitersError(400, "telegramUserId yaroqsiz");
-};
-const parseTelegramUsernameField = (value, options = {}) => {
-    const { required = false } = options;
-    if (value === undefined) {
-        if (required) {
-            throw new WaitersError(400, "telegramUsername kiritilishi shart");
-        }
-        return undefined;
-    }
-    if (value === null) {
-        if (required) {
-            throw new WaitersError(400, "telegramUsername kiritilishi shart");
-        }
-        return null;
-    }
-    if (typeof value !== "string") {
-        throw new WaitersError(400, "telegramUsername yaroqsiz");
-    }
-    const trimmed = value.trim();
-    if (!trimmed) {
-        if (required) {
-            throw new WaitersError(400, "telegramUsername kiritilishi shart");
-        }
-        return null;
-    }
-    if (!/^@?[A-Za-z0-9_]{5,32}$/.test(trimmed)) {
-        throw new WaitersError(400, "telegramUsername yaroqsiz");
-    }
-    return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 };
 const parseSharePercentField = (value, label, options = {}) => {
     const { required = false } = options;
@@ -129,13 +90,12 @@ const parseSharePercentField = (value, label, options = {}) => {
 };
 const serializeWaiter = (waiter) => ({
     ...waiter,
-    telegramUserId: waiter.telegramUserId ? waiter.telegramUserId.toString() : null,
     salesSharePercent: Number(waiter.salesSharePercent)
 });
 const mapPrismaError = (error) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === "P2002") {
-            return new WaitersError(409, "Telefon raqam, telegramUserId yoki telegramUsername allaqachon ishlatilgan");
+            return new WaitersError(409, "Telefon raqam allaqachon ishlatilgan");
         }
     }
     return error;
@@ -157,8 +117,6 @@ const waiterSelect = {
     id: true,
     fullName: true,
     phone: true,
-    telegramUserId: true,
-    telegramUsername: true,
     salesSharePercent: true,
     role: true,
     isActive: true,
@@ -202,19 +160,16 @@ export const waitersService = {
         }
         const fullName = parseRequiredString(payload.fullName, "F.I.Sh");
         const phone = parseRequiredPhoneField(payload.phone);
-        const telegramUserId = parseTelegramUserIdField(payload.telegramUserId);
-        const telegramUsername = parseTelegramUsernameField(payload.telegramUsername, {
-            required: true
-        });
+        const password = parsePasswordField(payload.password, { required: true });
         const salesSharePercent = parseSharePercentField(payload.salesSharePercent, "Ulush foizi", { required: true });
         const isActive = parseRequiredBooleanField(payload.isActive, "isActive");
         try {
+            const passwordHash = await bcrypt.hash(password, 10);
             const waiter = await prisma.user.create({
                 data: {
                     fullName,
                     phone,
-                    telegramUserId: telegramUserId ?? null,
-                    telegramUsername: telegramUsername ?? null,
+                    passwordHash,
                     salesSharePercent: salesSharePercent,
                     role: UserRole.WAITER,
                     branchId,
@@ -245,36 +200,20 @@ export const waitersService = {
         if (!existing) {
             throw new WaitersError(404, "Waiter topilmadi");
         }
-        const requiredFields = [
-            "fullName",
-            "phone",
-            "telegramUsername",
-            "salesSharePercent",
-            "isActive"
-        ];
+        const requiredFields = ["fullName", "phone", "salesSharePercent", "isActive"];
         for (const field of requiredFields) {
             if (!Object.prototype.hasOwnProperty.call(payload, field)) {
                 throw new WaitersError(400, "Yangilashda barcha maydonlar yuborilishi shart");
             }
         }
+        const password = parsePasswordField(payload.password);
         const data = {
             fullName: parseRequiredString(payload.fullName, "F.I.Sh"),
             phone: parseRequiredPhoneField(payload.phone),
-            telegramUsername: parseTelegramUsernameField(payload.telegramUsername, {
-                required: true
-            }),
             salesSharePercent: parseSharePercentField(payload.salesSharePercent, "Ulush foizi", { required: true }),
-            isActive: parseRequiredBooleanField(payload.isActive, "isActive")
+            isActive: parseRequiredBooleanField(payload.isActive, "isActive"),
+            ...(password ? { passwordHash: await bcrypt.hash(password, 10) } : {})
         };
-        if (Object.prototype.hasOwnProperty.call(payload, "telegramUserId")) {
-            const telegramUserId = parseTelegramUserIdField(payload.telegramUserId);
-            if (telegramUserId !== undefined) {
-                data.telegramUserId = telegramUserId;
-            }
-        }
-        else {
-            data.telegramUserId = null;
-        }
         try {
             const waiter = await prisma.user.update({
                 where: { id: waiterId },

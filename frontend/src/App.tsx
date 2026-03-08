@@ -38,7 +38,7 @@ const canAccessPage = (user: User | null, page: Page) => {
   }
 
   if (user.role === 'waiter') {
-    return false;
+    return page === 'tables' || page === 'orders' || page === 'profile';
   }
 
   if (page === 'profile') {
@@ -129,6 +129,7 @@ export function App() {
 
       setUser(auth.user);
       setIsAuthenticated(true);
+      setCurrentPage(resolveFallbackPage(auth.user));
 
       if (auth.user.role !== 'owner') {
         const cachedBranches = Array.isArray(auth.branches) ? auth.branches : [];
@@ -192,6 +193,7 @@ export function App() {
   ) => {
     setUser(u);
     setIsAuthenticated(true);
+    setCurrentPage(resolveFallbackPage(u));
     setAuth({
       user: u,
       token,

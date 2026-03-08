@@ -11,7 +11,6 @@ import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { productsRouter } from "./modules/products/products.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { tablesRouter } from "./modules/tables/tables.routes.js";
-import { telegramRouter } from "./modules/telegram/telegram.routes.js";
 import { waitersRouter } from "./modules/waiters/waiters.routes.js";
 export const app = express();
 app.use(cors({
@@ -31,7 +30,6 @@ app.use((req, res, next) => {
     next();
 });
 app.use("/auth", authRouter);
-app.use("/telegram", telegramRouter);
 app.use("/branches", branchesRouter);
 app.use("/waiters", waitersRouter);
 app.use("/managers", managersRouter);

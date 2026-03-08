@@ -10,6 +10,8 @@ meRouter.use(authMiddleware, requireRoles(["WAITER"]), activeBranchMiddleware);
 
 meRouter.get("/tables", (req, res) => meController.tables(req, res));
 meRouter.get("/products", (req, res) => meController.products(req, res));
+meRouter.get("/categories", (req, res) => meController.categories(req, res));
+meRouter.get("/earnings", (req, res) => meController.earnings(req, res));
 
 meRouter.get("/shift/status", (req, res) => meController.shiftStatus(req, res));
 meRouter.post("/shift/start", (req, res) => meController.shiftStart(req, res));

@@ -87,8 +87,6 @@ interface BackendWaiter {
   branchId: string | null;
   fullName: string;
   phone: string | null;
-  telegramUserId: string | null;
-  telegramUsername: string | null;
   salesSharePercent: string | number;
   isActive: boolean;
   createdAt: string;
@@ -114,6 +112,11 @@ interface BackendProduct {
 
 interface BackendTableOpenOrder {
   id: string;
+  waiterId?: string | null;
+  waiter?: {
+    id: string;
+    fullName: string;
+  } | null;
 }
 
 interface BackendTable {
@@ -203,10 +206,44 @@ interface BackendWaiterActivityPayload {
   data: BackendWaiterActivityRow[];
 }
 
+interface BackendMeEarningsPeriod {
+  from: string;
+  to: string;
+  closedOrdersCount: number;
+  salesTotal: string | number;
+  commissionTotal: string | number;
+}
+
+interface BackendMeShiftItem {
+  id: string;
+  status: "OPEN" | "CLOSED";
+  openedAt: string;
+  closedAt: string | null;
+}
+
+interface BackendMeEarningsPayload {
+  waiter: {
+    id: string;
+    fullName: string;
+    salesSharePercent: string | number;
+  };
+  baseDate: string;
+  day: BackendMeEarningsPeriod;
+  month: BackendMeEarningsPeriod;
+  year: BackendMeEarningsPeriod;
+  shifts: BackendMeShiftItem[];
+  shiftSummary: {
+    startedCount: number;
+    endedCount: number;
+    lastStartedAt: string | null;
+    lastEndedAt: string | null;
+  };
+}
+
 interface WaiterCreateInput {
   name: string;
   phone: string;
-  telegramId: string;
+  password: string;
   isEnabled: boolean;
   salesSharePercent: number;
 }
@@ -214,7 +251,7 @@ interface WaiterCreateInput {
 interface WaiterUpdateInput {
   name?: string;
   phone?: string;
-  telegramId?: string;
+  password?: string;
   isEnabled?: boolean;
   salesSharePercent?: number;
 }
@@ -372,47 +409,11 @@ const mapBranch = (branch: BackendBranch): Branch => ({
   isActive: branch.isActive
 });
 
-const parseTelegramUserId = (value: string | null | undefined) => {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed || !/^\d+$/.test(trimmed)) {
-    return null;
-  }
-
-  return trimmed;
-};
-
-const parseTelegramUsername = (value: string | null | undefined) => {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (/^\d+$/.test(trimmed)) {
-    return null;
-  }
-
-  const username = trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
-  if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) {
-    return trimmed;
-  }
-
-  return `@${username}`;
-};
-
 const mapWaiter = (waiter: BackendWaiter): Waiter => ({
   id: waiter.id,
   branchId: waiter.branchId ?? '',
   name: waiter.fullName,
   phone: waiter.phone ?? '',
-  telegramId: waiter.telegramUsername ?? waiter.telegramUserId ?? '',
   isEnabled: waiter.isActive,
   salesSharePercent: toNumber(waiter.salesSharePercent, 8),
   shiftStatus: waiter.isActive ? 'not_started' : 'ended',
@@ -448,7 +449,9 @@ const mapTable = (table: BackendTable): TableItem => ({
   branchId: table.branchId,
   name: table.name,
   status: mapTableStatus(table.status),
-  currentOrderId: table.orders?.[0]?.id
+  currentOrderId: table.orders?.[0]?.id,
+  currentOrderWaiterId: table.orders?.[0]?.waiter?.id ?? table.orders?.[0]?.waiterId ?? undefined,
+  currentOrderWaiterName: table.orders?.[0]?.waiter?.fullName ?? undefined
 });
 
 const mapCategory = (category: BackendCategory): Category => ({
@@ -734,8 +737,7 @@ export const api = {
         body: JSON.stringify({
           fullName: data.name,
           phone: data.phone || null,
-          telegramUserId: parseTelegramUserId(data.telegramId),
-          telegramUsername: parseTelegramUsername(data.telegramId),
+          password: data.password,
           salesSharePercent: data.salesSharePercent,
           isActive: data.isEnabled
         })
@@ -749,10 +751,7 @@ export const api = {
 
       if (data.name !== undefined) payload.fullName = data.name;
       if (data.phone !== undefined) payload.phone = data.phone || null;
-      if (data.telegramId !== undefined) {
-        payload.telegramUserId = parseTelegramUserId(data.telegramId);
-        payload.telegramUsername = parseTelegramUsername(data.telegramId);
-      }
+      if (data.password !== undefined) payload.password = data.password;
       if (data.isEnabled !== undefined) payload.isActive = data.isEnabled;
       if (data.salesSharePercent !== undefined) {
         payload.salesSharePercent = data.salesSharePercent;
@@ -1254,6 +1253,65 @@ export const api = {
 
         ordersChart,
         openOrders: openOrders.map(mapOrder)
+      };
+    }
+  },
+
+  me: {
+    tables: async (): Promise<TableItem[]> => {
+      const rows = await request<BackendTable[]>("/me/tables");
+      return rows.filter((table) => table.status !== "DISABLED").map(mapTable);
+    },
+
+    categories: async (): Promise<Category[]> => {
+      const rows = await request<BackendCategory[]>("/me/categories");
+      return rows.map(mapCategory);
+    },
+
+    products: async (): Promise<Product[]> => {
+      const rows = await request<BackendProduct[]>("/me/products");
+      return rows.map(mapProduct).filter((product) => product.isActive);
+    },
+
+    earnings: async (date?: string) => {
+      const query = buildQuery({ date });
+      const payload = await request<BackendMeEarningsPayload>(`/me/earnings${query}`);
+
+      return {
+        waiter: {
+          id: payload.waiter.id,
+          fullName: payload.waiter.fullName,
+          salesSharePercent: toNumber(payload.waiter.salesSharePercent, 8)
+        },
+        baseDate: payload.baseDate,
+        day: {
+          from: payload.day.from,
+          to: payload.day.to,
+          closedOrdersCount: payload.day.closedOrdersCount,
+          salesTotal: toNumber(payload.day.salesTotal),
+          commissionTotal: toNumber(payload.day.commissionTotal)
+        },
+        month: {
+          from: payload.month.from,
+          to: payload.month.to,
+          closedOrdersCount: payload.month.closedOrdersCount,
+          salesTotal: toNumber(payload.month.salesTotal),
+          commissionTotal: toNumber(payload.month.commissionTotal)
+        },
+        year: {
+          from: payload.year.from,
+          to: payload.year.to,
+          closedOrdersCount: payload.year.closedOrdersCount,
+          salesTotal: toNumber(payload.year.salesTotal),
+          commissionTotal: toNumber(payload.year.commissionTotal)
+        },
+        shifts: payload.shifts.map((shift) => ({
+          id: shift.id,
+          status: shift.status,
+          openedAt: shift.openedAt,
+          closedAt: shift.closedAt
+        })),
+        shiftSummary: payload.shiftSummary
       };
     }
   },

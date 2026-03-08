@@ -19,6 +19,7 @@ interface ProductsPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
+const ALL_CATEGORY_ID = 'all';
 export function ProductsPage({
   activeBranchId,
   activeBranchName
@@ -28,7 +29,7 @@ export function ProductsPage({
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [selectedCat, setSelectedCat] = useState<string>(ALL_CATEGORY_ID);
   const [search, setSearch] = useState('');
   const [catModal, setCatModal] = useState(false);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
@@ -64,7 +65,11 @@ export function ProductsPage({
     );
     setCategories(cats);
     setProducts(prods);
-    if (cats.length > 0 && !selectedCat) setSelectedCat(cats[0].id);
+    setSelectedCat((prev) =>
+    prev !== ALL_CATEGORY_ID && !cats.some((cat) => cat.id === prev) ?
+    ALL_CATEGORY_ID :
+    prev
+    );
     setLoading(false);
   };
   useEffect(() => {
@@ -93,7 +98,7 @@ export function ProductsPage({
   }, [activeBranchId]);
 
   const filteredProducts = products.filter((p) => {
-    const matchCat = !selectedCat || p.categoryId === selectedCat;
+    const matchCat = selectedCat === ALL_CATEGORY_ID || p.categoryId === selectedCat;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
@@ -160,7 +165,7 @@ export function ProductsPage({
       await api.categories.delete(deleteCat.id);
       toast.deleted("Kategoriya o'chirildi");
       setDeleteCat(null);
-      if (selectedCat === deleteCat.id) setSelectedCat(null);
+      if (selectedCat === deleteCat.id) setSelectedCat(ALL_CATEGORY_ID);
       load();
     } catch {
       toast.error();
@@ -175,7 +180,7 @@ export function ProductsPage({
     setProdForm({
       name: '',
       price: '',
-      categoryId: selectedCat || categories[0]?.id || '',
+      categoryId: selectedCat !== ALL_CATEGORY_ID ? selectedCat : categories[0]?.id || '',
       isActive: true
     });
     setProdErrors({});
@@ -255,6 +260,7 @@ export function ProductsPage({
       setTogglingProdId(null);
     }
   };
+  const totalProductsCount = products.length;
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="lg:flex items-center justify-between hidden">
@@ -278,6 +284,17 @@ export function ProductsPage({
           {/* Mobile Categories (Horizontal Scroll) */}
           <div className="md:hidden">
             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+              <button
+                onClick={() => setSelectedCat(ALL_CATEGORY_ID)}
+                className={clsx(
+                  'flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
+                  selectedCat === ALL_CATEGORY_ID ?
+                  'bg-indigo-600 text-white' :
+                  'bg-white border border-slate-200 text-slate-600'
+                )}>
+
+                Barchasi <span className="opacity-70 ml-1">({totalProductsCount})</span>
+              </button>
               {categories.map((c) => {
               const count = products.filter(
                 (p) => p.categoryId === c.id
@@ -324,70 +341,94 @@ export function ProductsPage({
                 </Button>
               }
             </div>
-            {categories.length === 0 ?
-          <div className="py-10 text-center">
-                <Tag className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">Kategoriyalar yo'q</p>
-                <p className="text-slate-400 text-sm">
-                  Bu kategoriyada mahsulotlar yo'q
-                </p>
-              </div> :
+            <div className="divide-y divide-slate-100">
+              <div
+                onClick={() => setSelectedCat(ALL_CATEGORY_ID)}
+                className={clsx(
+                  'flex items-center justify-between px-4 py-3 cursor-pointer transition-colors',
+                  selectedCat === ALL_CATEGORY_ID ?
+                  'bg-indigo-50' :
+                  'hover:bg-slate-50'
+                )}>
 
-          <div className="divide-y divide-slate-100">
-                {categories.map((c) => {
-              const count = products.filter(
-                (p) => p.categoryId === c.id
-              ).length;
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => setSelectedCat(c.id)}
-                  className={clsx(
-                    'flex items-center justify-between px-4 py-3 cursor-pointer transition-colors group',
-                    selectedCat === c.id ?
-                    'bg-indigo-50' :
-                    'hover:bg-slate-50'
-                  )}>
+                <div className="flex items-center space-x-2 min-w-0">
+                  <span
+                    className={clsx(
+                      'text-sm font-medium truncate',
+                      selectedCat === ALL_CATEGORY_ID ?
+                      'text-indigo-700' :
+                      'text-slate-700'
+                    )}>
 
-                      <div className="flex items-center space-x-2 min-w-0">
-                        <span
-                      className={clsx(
-                        'text-sm font-medium truncate',
-                        selectedCat === c.id ?
-                        'text-indigo-700' :
-                        'text-slate-700'
-                      )}>
-
-                          {c.name}
-                        </span>
-                        <span className="text-xs text-slate-400 flex-shrink-0">
-                          {count} ta
-                        </span>
-                      </div>
-                      {canManageProducts &&
-                      <div
-                        className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}>
-
-                        <button
-                      onClick={() => openEditCat(c)}
-                      className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors">
-
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                      onClick={() => setDeleteCat(c)}
-                      className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors">
-
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      }
-                    </div>);
-
-            })}
+                    Barchasi
+                  </span>
+                  <span className="text-xs text-slate-400 flex-shrink-0">
+                    {totalProductsCount} ta
+                  </span>
+                </div>
               </div>
-          }
+              {categories.length === 0 &&
+              <div className="py-10 text-center">
+                  <Tag className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs text-slate-400">Kategoriyalar yo'q</p>
+                  <p className="text-slate-400 text-sm">
+                    Bu filialda hali kategoriya qo'shilmagan
+                  </p>
+                </div>
+              }
+              {categories.map((c) => {
+                const count = products.filter(
+                  (p) => p.categoryId === c.id
+                ).length;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCat(c.id)}
+                    className={clsx(
+                      'flex items-center justify-between px-4 py-3 cursor-pointer transition-colors group',
+                      selectedCat === c.id ?
+                      'bg-indigo-50' :
+                      'hover:bg-slate-50'
+                    )}>
+
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <span
+                        className={clsx(
+                          'text-sm font-medium truncate',
+                          selectedCat === c.id ?
+                          'text-indigo-700' :
+                          'text-slate-700'
+                        )}>
+
+                        {c.name}
+                      </span>
+                      <span className="text-xs text-slate-400 flex-shrink-0">
+                        {count} ta
+                      </span>
+                    </div>
+                    {canManageProducts &&
+                    <div
+                      className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}>
+
+                      <button
+                        onClick={() => openEditCat(c)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors">
+
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteCat(c)}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors">
+
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    }
+                  </div>);
+
+              })}
+            </div>
           </div>
 
           {/* Products Panel */}

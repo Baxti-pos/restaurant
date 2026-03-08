@@ -83,6 +83,39 @@ export const meController = {
             return handleError(res, error);
         }
     },
+    async categories(req, res) {
+        try {
+            const ctx = getWaiterContext(req);
+            if (!ctx) {
+                return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+            }
+            const data = await meService.categories(ctx.waiterId, ctx.branchId);
+            return res.status(200).json({
+                message: "Waiter uchun kategoriyalar ro'yxati",
+                data
+            });
+        }
+        catch (error) {
+            return handleError(res, error);
+        }
+    },
+    async earnings(req, res) {
+        try {
+            const ctx = getWaiterContext(req);
+            if (!ctx) {
+                return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+            }
+            const query = typeof req.query === "object" && req.query ? req.query : {};
+            const data = await meService.earnings(ctx.waiterId, ctx.branchId, query);
+            return res.status(200).json({
+                message: "Waiter daromad ma'lumoti",
+                data
+            });
+        }
+        catch (error) {
+            return handleError(res, error);
+        }
+    },
     async shiftStatus(req, res) {
         try {
             const ctx = getWaiterContext(req);

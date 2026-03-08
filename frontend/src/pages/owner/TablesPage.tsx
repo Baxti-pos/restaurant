@@ -39,11 +39,9 @@ export function TablesPage({
 }: TablesPageProps) {
   const auth = getAuth();
   const user = auth.user;
+  const isWaiter = user?.role === "waiter";
   const canManageTables = hasPermission(user, "TABLES_MANAGE");
-  const canViewProducts = hasAnyPermission(user, [
-    "PRODUCTS_VIEW",
-    "ORDERS_MANAGE",
-  ]);
+  const canViewProducts = isWaiter || hasAnyPermission(user, ["PRODUCTS_VIEW", "ORDERS_MANAGE"]);
   const canEditOrderItems = hasPermission(user, "ORDERS_EDIT");
   const canCloseOrders = hasPermission(user, "ORDERS_CLOSE");
   const canUseAdvancedOrderActions = canEditOrderItems || canCloseOrders;
@@ -90,16 +88,19 @@ export function TablesPage({
   // ── Load tables ───────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
-    const [tablesResult, productsResult, categoriesResult] =
-      await Promise.allSettled([
-        api.tables.listByBranch(activeBranchId),
-        canViewProducts
-          ? api.products.listByBranch(activeBranchId)
-          : Promise.resolve([]),
-        canViewProducts
-          ? api.categories.listByBranch(activeBranchId)
-          : Promise.resolve([]),
-      ]);
+    const [tablesResult, productsResult, categoriesResult] = await Promise.allSettled([
+      isWaiter ? api.me.tables() : api.tables.listByBranch(activeBranchId),
+      canViewProducts
+        ? isWaiter
+          ? api.me.products()
+          : api.products.listByBranch(activeBranchId)
+        : Promise.resolve([]),
+      canViewProducts
+        ? isWaiter
+          ? api.me.categories()
+          : api.categories.listByBranch(activeBranchId)
+        : Promise.resolve([]),
+    ]);
 
     if (tablesResult.status === "fulfilled") {
       setTables(tablesResult.value);
@@ -123,7 +124,7 @@ export function TablesPage({
   };
   useEffect(() => {
     void load();
-  }, [activeBranchId, canViewProducts]);
+  }, [activeBranchId, canViewProducts, isWaiter]);
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
@@ -149,7 +150,7 @@ export function TablesPage({
     });
 
     return unsubscribe;
-  }, [activeBranchId, canViewProducts]);
+  }, [activeBranchId, canViewProducts, isWaiter]);
   // ── Table form ────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null);
@@ -770,6 +771,14 @@ export function TablesPage({
                 <Badge variant={cfg.badge} size="sm">
                   {cfg.label}
                 </Badge>
+                {t.status === "occupied" && (
+                  <p className="mt-2 text-[11px] text-slate-600 text-center leading-4 max-w-full break-words">
+                    Girgitton:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {t.currentOrderWaiterName ?? "Noma'lum"}
+                    </span>
+                  </p>
+                )}
               </div>
             );
           })}

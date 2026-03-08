@@ -74,6 +74,17 @@ export function OrdersPage({
   activeBranchName,
 }: OrdersPageProps) {
   const authUser = getAuth().user;
+  const isWaiter = authUser?.role === "waiter";
+
+  if (isWaiter) {
+    return (
+      <WaiterEarningsTab
+        activeBranchId={activeBranchId}
+        activeBranchName={activeBranchName}
+      />
+    );
+  }
+
   const canOrdersView = hasPermission(authUser, "ORDERS_VIEW");
   const canReportsView = hasPermission(authUser, "REPORTS_VIEW");
   const availableTabs: {
@@ -625,6 +636,148 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
   );
 }
 // ─── Tab 2: Daily ─────────────────────────────────────────────────────────────
+function WaiterEarningsTab({
+  activeBranchId,
+  activeBranchName,
+}: {
+  activeBranchId: string;
+  activeBranchName: string;
+}) {
+  const [date, setDate] = useState(todayStr());
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.me.earnings>> | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    api.me
+      .earnings(date)
+      .then((payload) => setData(payload))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+  }, [date, activeBranchId]);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (
+        event !== "tables.updated" &&
+        event !== "order.updated" &&
+        event !== "order.closed"
+      ) {
+        return;
+      }
+
+      if (!matchesActiveBranch(payload, activeBranchId)) {
+        return;
+      }
+
+      load();
+    });
+
+    return unsubscribe;
+  }, [activeBranchId, date]);
+
+  return (
+    <div className="space-y-5">
+      <div className="hidden lg:block">
+        <h1 className="text-lg md:text-xl font-bold text-slate-900">Mening ulushim</h1>
+        <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+          Faol filial:{" "}
+          <span className="font-medium text-indigo-600">{activeBranchName}</span>
+        </p>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 md:items-end">
+        <Input
+          label="Sana"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full md:w-44"
+        />
+        <Button onClick={load} variant="secondary">
+          Yangilash
+        </Button>
+      </div>
+
+      {loading ? (
+        <CardSkeleton count={4} />
+      ) : !data ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+          <p className="text-slate-500 text-sm">Ma'lumot topilmadi</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard
+              title="Kunlik ulush"
+              value={formatCurrency(data.day.commissionTotal)}
+              icon={DollarSign}
+              color="indigo"
+              subtitle={`Buyurtma: ${data.day.closedOrdersCount} ta`}
+            />
+            <StatCard
+              title="Oylik ulush"
+              value={formatCurrency(data.month.commissionTotal)}
+              icon={TrendingUp}
+              color="green"
+              subtitle={`Buyurtma: ${data.month.closedOrdersCount} ta`}
+            />
+            <StatCard
+              title="Yillik ulush"
+              value={formatCurrency(data.year.commissionTotal)}
+              icon={CheckCircle}
+              color="amber"
+              subtitle={`Buyurtma: ${data.year.closedOrdersCount} ta`}
+            />
+            <StatCard
+              title="Ulush foizi"
+              value={`${data.waiter.salesSharePercent}%`}
+              icon={Users}
+              color="red"
+              subtitle={data.waiter.fullName}
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Smena tarixi</h3>
+            {data.shifts.length === 0 ? (
+              <p className="text-sm text-slate-500">Hali smena ma'lumoti yo'q</p>
+            ) : (
+              <div className="space-y-2">
+                {data.shifts.map((shift) => (
+                  <div
+                    key={shift.id}
+                    className="rounded-lg border border-slate-200 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5"
+                  >
+                    <div className="text-sm text-slate-700">
+                      Boshlanish:{" "}
+                      <span className="font-medium text-slate-900">
+                        {formatDateTime(shift.openedAt)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      Tugash:{" "}
+                      <span className="font-medium text-slate-900">
+                        {shift.closedAt ? formatDateTime(shift.closedAt) : "Hali yopilmagan"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DailyTab({ activeBranchId }: { activeBranchId: string }) {
   const [date, setDate] = useState(todayStr());
   const [data, setData] = useState<any>(null);

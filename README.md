@@ -41,7 +41,6 @@ restaurant/
 |       |   |-- products/
 |       |   |-- reports/
 |       |   |-- tables/
-|       |   |-- telegram/
 |       |   `-- waiters/
 |       `-- socket/
 `-- frontend/
@@ -137,14 +136,12 @@ NODE_ENV=development
 CORS_ORIGIN=*
 JWT_SECRET=some_long_secret
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/baxti_pos?schema=public
-TELEGRAM_BOT_TOKEN=xxxxxx:yyyyyy
 SHIFT_ENFORCE=false
 ```
 
 Notes:
 
 - Replace `USER:PASSWORD` with your actual PostgreSQL credentials.
-- `TELEGRAM_BOT_TOKEN` is required if Telegram-related flows are used.
 - `SHIFT_ENFORCE` is included for local configuration compatibility (may be reserved for business logic enforcement).
 
 ### 4. Prisma Setup (Generate, Migrate, Seed)
@@ -230,7 +227,6 @@ The backend reads environment variables from `backend/.env` (directly and via `b
 | `CORS_ORIGIN` | Yes | `*` or `http://localhost:5173` | CORS policy for REST + Socket.IO |
 | `JWT_SECRET` | Yes | `some_long_secret` | JWT signing secret |
 | `DATABASE_URL` | Yes | `postgresql://user:pass@localhost:5432/baxti_pos?schema=public` | Prisma/PostgreSQL connection string |
-| `TELEGRAM_BOT_TOKEN` | Conditional | `123456:ABC...` | Telegram bot integration |
 | `SHIFT_ENFORCE` | Optional/Reserved | `false` | Shift policy toggle (business rule flag) |
 
 ## API Overview
@@ -249,7 +245,6 @@ Note:
 Mounted in `backend/src/app.ts`:
 
 - `/auth`
-- `/telegram`
 - `/branches`
 - `/waiters`
 - `/categories`

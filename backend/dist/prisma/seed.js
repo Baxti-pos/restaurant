@@ -5,7 +5,10 @@ async function main() {
     const ownerPhone = process.env.SEED_OWNER_PHONE || "+998901234567";
     const ownerPassword = process.env.SEED_OWNER_PASSWORD || "admin123";
     const ownerFullName = process.env.SEED_OWNER_FULLNAME || "Baxti Owner";
+    const waiterPhone = process.env.SEED_WAITER_PHONE || "+998911111111";
+    const waiterPassword = process.env.SEED_WAITER_PASSWORD || "waiter123";
     const ownerPasswordHash = await bcrypt.hash(ownerPassword, 10);
+    const waiterPasswordHash = await bcrypt.hash(waiterPassword, 10);
     const owner = await prisma.user.upsert({
         where: { phone: ownerPhone },
         update: {
@@ -35,19 +38,20 @@ async function main() {
         },
     });
     const waiter = await prisma.user.upsert({
-        where: { telegramUserId: BigInt(111111111) },
+        where: { phone: waiterPhone },
         update: {
-            fullName: "Telegram Waiter",
+            fullName: "Girgitton",
+            phone: waiterPhone,
+            passwordHash: waiterPasswordHash,
             role: UserRole.WAITER,
             branchId: branch.id,
-            telegramUsername: "@telegram_waiter",
             salesSharePercent: new Prisma.Decimal("8.00"),
             isActive: true,
         },
         create: {
-            fullName: "Telegram Waiter",
-            telegramUserId: BigInt(111111111),
-            telegramUsername: "@telegram_waiter",
+            fullName: "Girgitton",
+            phone: waiterPhone,
+            passwordHash: waiterPasswordHash,
             salesSharePercent: new Prisma.Decimal("8.00"),
             role: UserRole.WAITER,
             branchId: branch.id,
@@ -123,8 +127,8 @@ async function main() {
     console.log("Seed tugadi:", {
         branch: branch.name,
         ownerPhone: owner.phone,
-        waiterTelegramUserId: waiter.telegramUserId?.toString(),
-        waiterTelegramUsername: waiter.telegramUsername,
+        waiterPhone: waiter.phone,
+        waiterPassword,
         waiterSalesSharePercent: waiter.salesSharePercent.toString(),
     });
 }

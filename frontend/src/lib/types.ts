@@ -37,7 +37,6 @@ export interface Waiter {
   branchId: string;
   name: string;
   phone: string;
-  telegramId: string;
   isEnabled: boolean;
   salesSharePercent: number;
   shiftStatus: ShiftStatus;
@@ -66,6 +65,8 @@ export interface TableItem {
   name: string;
   status: TableStatus;
   currentOrderId?: string;
+  currentOrderWaiterId?: string;
+  currentOrderWaiterName?: string;
 }
 
 export interface Category {
