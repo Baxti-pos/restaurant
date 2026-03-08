@@ -122,20 +122,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 Kirish
               </Button>
             </form>
-
-            <div className="mt-6 pt-5 border-t border-slate-100">
-              <p className="text-xs text-slate-400 text-center mb-2">
-                Demo kirish ma'lumotlari:
-              </p>
-              <div className="bg-slate-50 rounded-xl p-3 text-center">
-                <p className="text-xs text-slate-500 font-mono">
-                  Tel: <span className="text-slate-700">+998901234567</span>
-                </p>
-                <p className="text-xs text-slate-500 font-mono">
-                  Parol: <span className="text-slate-700">admin123</span>
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
