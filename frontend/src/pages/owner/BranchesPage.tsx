@@ -115,9 +115,6 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Filiallar
           </h1>
-          <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-            Barcha filiallarni boshqarish
-          </p>
         </div>
         {/* Desktop: Full Button only */}
         <div className="hidden md:block">
