@@ -1,6 +1,7 @@
 import type { UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import { Prisma } from "@prisma/client";
 import { config } from "../../config.js";
 import { prisma } from "../../prisma.js";
 
@@ -24,6 +25,12 @@ interface SelectBranchInput {
   userId: string;
   role: AppRole;
   branchId?: unknown;
+}
+
+interface OwnerProfileContext {
+  userId: string;
+  role: AppRole;
+  activeBranchId: string | null;
 }
 
 export class AuthError extends Error {
@@ -59,6 +66,68 @@ const buildTokenPayload = (params: {
     activeBranchId: params.activeBranchId,
     tokenType: "access"
   };
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parseRequiredString = (value: unknown, label: string) => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AuthError(400, `${label} kiritilishi shart`);
+  }
+
+  return value.trim();
+};
+
+const normalizeUzPhone = (raw: string) => {
+  const digits = raw.replace(/\D/g, "");
+  const local = digits.startsWith("998") ? digits.slice(3) : digits;
+  return `+998${local.slice(0, 9)}`;
+};
+
+const parseRequiredPhoneField = (value: unknown) => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new AuthError(400, "Telefon raqam kiritilishi shart");
+  }
+
+  const normalized = normalizeUzPhone(value);
+  if (!/^\+998\d{9}$/.test(normalized)) {
+    throw new AuthError(400, "Telefon raqam +998XXXXXXXXX formatida bo'lishi kerak");
+  }
+
+  return normalized;
+};
+
+const ensureOwnerContext = (ctx: OwnerProfileContext) => {
+  if (ctx.role !== "OWNER") {
+    throw new AuthError(403, "Faqat owner profili uchun ruxsat berilgan");
+  }
+};
+
+const mapOwnerProfile = (user: {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  role: UserRole;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: user.id,
+  fullName: user.fullName,
+  phone: user.phone,
+  role: mapRole(user.role),
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt
+});
+
+const mapAuthError = (error: unknown) => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      return new AuthError(409, "Telefon raqam allaqachon ishlatilgan");
+    }
+  }
+
+  return error;
 };
 
 export const signAccessToken = (payload: AppJwtPayload) => {
@@ -242,5 +311,158 @@ export const authService = {
       accessToken,
       branch
     };
+  },
+
+  async getOwnerProfile(ctx: OwnerProfileContext) {
+    ensureOwnerContext(ctx);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: ctx.userId,
+        role: "OWNER"
+      },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!user) {
+      throw new AuthError(404, "Owner topilmadi");
+    }
+
+    if (!user.isActive) {
+      throw new AuthError(403, "Foydalanuvchi faol emas");
+    }
+
+    return mapOwnerProfile(user);
+  },
+
+  async updateOwnerProfile(ctx: OwnerProfileContext, payload: unknown) {
+    ensureOwnerContext(ctx);
+
+    if (!isObject(payload)) {
+      throw new AuthError(400, "So'rov ma'lumoti yaroqsiz");
+    }
+
+    const fullNameRaw = payload.fullName;
+    const phoneRaw = payload.phone;
+    const currentPasswordRaw = payload.currentPassword;
+    const newPasswordRaw = payload.newPassword;
+
+    const hasFullName = fullNameRaw !== undefined;
+    const hasPhone = phoneRaw !== undefined;
+    const hasCurrentPassword = currentPasswordRaw !== undefined;
+    const hasNewPassword = newPasswordRaw !== undefined;
+
+    if (!hasFullName && !hasPhone && !hasCurrentPassword && !hasNewPassword) {
+      throw new AuthError(400, "Yangilash uchun kamida bitta maydon yuboring");
+    }
+
+    const owner = await prisma.user.findFirst({
+      where: {
+        id: ctx.userId,
+        role: "OWNER"
+      },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        branchId: true,
+        isActive: true,
+        passwordHash: true
+      }
+    });
+
+    if (!owner) {
+      throw new AuthError(404, "Owner topilmadi");
+    }
+
+    if (!owner.isActive) {
+      throw new AuthError(403, "Foydalanuvchi faol emas");
+    }
+
+    const data: Prisma.UserUpdateInput = {};
+
+    if (hasFullName) {
+      data.fullName = parseRequiredString(fullNameRaw, "F.I.Sh");
+    }
+
+    if (hasPhone) {
+      data.phone = parseRequiredPhoneField(phoneRaw);
+    }
+
+    if (hasCurrentPassword || hasNewPassword) {
+      if (typeof currentPasswordRaw !== "string" || !currentPasswordRaw.trim()) {
+        throw new AuthError(400, "Joriy parol kiritilishi shart");
+      }
+
+      if (typeof newPasswordRaw !== "string" || !newPasswordRaw.trim()) {
+        throw new AuthError(400, "Yangi parol kiritilishi shart");
+      }
+
+      const newPassword = newPasswordRaw.trim();
+      if (newPassword.length < 4) {
+        throw new AuthError(400, "Yangi parol kamida 4 ta belgidan iborat bo'lishi kerak");
+      }
+
+      if (!owner.passwordHash) {
+        throw new AuthError(400, "Parolni yangilash imkonsiz");
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPasswordRaw,
+        owner.passwordHash
+      );
+
+      if (!isCurrentPasswordValid) {
+        throw new AuthError(401, "Joriy parol noto'g'ri");
+      }
+
+      data.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new AuthError(400, "Yangilash uchun yaroqli ma'lumot yuboring");
+    }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: owner.id },
+        data,
+        select: {
+          id: true,
+          fullName: true,
+          phone: true,
+          role: true,
+          branchId: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+
+      const accessToken = signAccessToken(
+        buildTokenPayload({
+          userId: updated.id,
+          role: mapRole(updated.role),
+          fullName: updated.fullName,
+          branchId: updated.branchId ?? null,
+          activeBranchId: ctx.activeBranchId
+        })
+      );
+
+      return {
+        profile: mapOwnerProfile(updated),
+        accessToken
+      };
+    } catch (error) {
+      throw mapAuthError(error);
+    }
   }
 };

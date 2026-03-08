@@ -10,6 +10,7 @@ import {
   OrderItem,
   Expense,
   User,
+  OwnerProfile,
   DashboardStats,
   WaiterActivity,
   PaymentType,
@@ -48,6 +49,15 @@ interface BackendLoginResult {
   requiresBranchSelection: boolean;
   user: BackendAuthUser;
   branches: BackendBranch[];
+}
+
+interface BackendOwnerProfile {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  role: BackendRole;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface BackendWaiter {
@@ -294,6 +304,15 @@ const mapUser = (user: BackendAuthUser): User => ({
   name: user.fullName,
   phone: user.phone ?? '',
   role: mapRole(user.role)
+});
+
+const mapOwnerProfile = (profile: BackendOwnerProfile): OwnerProfile => ({
+  id: profile.id,
+  fullName: profile.fullName,
+  phone: profile.phone ?? '',
+  role: mapRole(profile.role),
+  createdAt: profile.createdAt,
+  updatedAt: profile.updatedAt
 });
 
 const mapBranch = (branch: BackendBranch): Branch => ({
@@ -583,6 +602,33 @@ export const api = {
 
     logout: async (): Promise<void> => {
       return Promise.resolve();
+    }
+  },
+
+  ownerProfile: {
+    get: async (): Promise<OwnerProfile> => {
+      const profile = await request<BackendOwnerProfile>('/auth/me');
+      return mapOwnerProfile(profile);
+    },
+
+    update: async (payload: {
+      fullName: string;
+      phone: string;
+      currentPassword?: string;
+      newPassword?: string;
+    }): Promise<{profile: OwnerProfile;token: string;}> => {
+      const data = await request<{
+        profile: BackendOwnerProfile;
+        accessToken: string;
+      }>('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return {
+        profile: mapOwnerProfile(data.profile),
+        token: data.accessToken
+      };
     }
   },
 

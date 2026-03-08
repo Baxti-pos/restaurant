@@ -12,6 +12,15 @@ export interface User {
   role: Role;
 }
 
+export interface OwnerProfile {
+  id: string;
+  fullName: string;
+  phone: string;
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Branch {
   id: string;
   name: string;

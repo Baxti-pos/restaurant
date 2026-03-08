@@ -9,6 +9,7 @@ import { TablesPage } from './pages/owner/TablesPage';
 import { ProductsPage } from './pages/owner/ProductsPage';
 import { ExpensesPage } from './pages/owner/ExpensesPage';
 import { OrdersPage } from './pages/owner/OrdersPage';
+import { ProfilePage } from './pages/owner/ProfilePage';
 import { ToastProvider } from './components/ui/Toast';
 import { getAuth, setAuth, clearAuth } from './lib/auth';
 import { api } from './lib/api';
@@ -20,7 +21,8 @@ type Page =
 'tables' |
 'products' |
 'expenses' |
-'orders';
+'orders' |
+'profile';
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -151,6 +153,22 @@ export function App() {
       setBranches([]);
     });
   };
+
+  const handleUserChange = (nextUser: User, nextToken?: string) => {
+    const auth = getAuth();
+    const resolvedToken = nextToken && nextToken.trim() ? nextToken : auth.token;
+
+    if (!resolvedToken) {
+      return;
+    }
+
+    setUser(nextUser);
+    setAuth({
+      user: nextUser,
+      token: resolvedToken,
+      activeBranchId: auth.activeBranchId
+    });
+  };
   if (!appReady) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -234,6 +252,9 @@ export function App() {
           activeBranchId={activeBranchId}
           activeBranchName={activeBranchName} />
 
+        }
+        {currentPage === 'profile' &&
+        <ProfilePage user={user!} onUserChange={handleUserChange} />
         }
       </OwnerLayout>
     </>);

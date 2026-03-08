@@ -271,6 +271,16 @@ export function OwnerLayout({
                 </div>
                 <button
                 onClick={() => {
+                  onNavigate('profile');
+                  setProfileDropdown(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
+
+                  <User className="h-4 w-4" />
+                  <span>Profil</span>
+                </button>
+                <button
+                onClick={() => {
                   onLogout();
                   setProfileDropdown(false);
                 }}
@@ -303,6 +313,16 @@ export function OwnerLayout({
                     </p>
                     <p className="text-xs text-slate-500">Boshqaruvchi</p>
                   </div>
+                  <button
+                  onClick={() => {
+                    onNavigate('profile');
+                    setProfileDropdown(false);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center space-x-2">
+
+                    <User className="h-4 w-4" />
+                    <span>Profil</span>
+                  </button>
                   <button
                   onClick={() => {
                     onLogout();
@@ -407,6 +427,18 @@ export function OwnerLayout({
 
                 <Building2 className="h-5 w-5" />
                 <span>Filiallar</span>
+              </button>
+              <button
+              onClick={() => handleMobileNavigate('profile')}
+              className={clsx(
+                'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                currentPage === 'profile' ?
+                'bg-indigo-50 text-indigo-600' :
+                'text-slate-700 hover:bg-slate-50'
+              )}>
+
+                <User className="h-5 w-5" />
+                <span>Profil</span>
               </button>
               <div className="h-px bg-slate-100 my-2" />
               <button

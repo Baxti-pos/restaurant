@@ -13,3 +13,11 @@ authRouter.post(
   requireRoles(["OWNER"]),
   (req, res) => authController.selectBranch(req, res)
 );
+
+authRouter.get("/me", authMiddleware, requireRoles(["OWNER"]), (req, res) =>
+  authController.me(req, res)
+);
+
+authRouter.patch("/me", authMiddleware, requireRoles(["OWNER"]), (req, res) =>
+  authController.updateMe(req, res)
+);
