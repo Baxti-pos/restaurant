@@ -21,11 +21,26 @@ declare global {
 interface PwaInstallState {
   canInstall: boolean;
   isStandalone: boolean;
+  isIos: boolean;
 }
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let isInitialized = false;
 const listeners = new Set<(state: PwaInstallState) => void>();
+
+const detectIos = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const ua = window.navigator.userAgent || "";
+  const platform = window.navigator.platform || "";
+  const isAppleMobile =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
+
+  return isAppleMobile;
+};
 
 const getStandaloneState = () => {
   if (typeof window === "undefined") {
@@ -41,6 +56,7 @@ const getStandaloneState = () => {
 const getCurrentState = (): PwaInstallState => ({
   canInstall: Boolean(deferredPrompt),
   isStandalone: getStandaloneState(),
+  isIos: detectIos(),
 });
 
 const notify = () => {

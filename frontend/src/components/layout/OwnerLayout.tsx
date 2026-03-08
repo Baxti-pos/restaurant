@@ -18,6 +18,7 @@ import { Branch, User as UserType } from '../../lib/types';
 import { clsx } from 'clsx';
 import { hasAnyPermission, hasPermission } from '../../lib/permissions';
 import { usePwaInstall } from '../../lib/pwa';
+import { toast } from '../ui/Toast';
 interface OwnerLayoutProps {
   children: React.ReactNode;
   currentPage: string;
@@ -113,8 +114,8 @@ export function OwnerLayout({
   const [profileDropdown, setProfileDropdown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isWaiter = user?.role === 'waiter';
-  const { canInstall, isStandalone, install } = usePwaInstall();
-  const showInstallAction = isWaiter && !isStandalone && canInstall;
+  const { canInstall, isStandalone, install, isIos } = usePwaInstall();
+  const showInstallAction = isWaiter && !isStandalone && (canInstall || isIos);
 
   useEffect(() => {
     if (isWaiter && isStandalone) {
@@ -137,6 +138,12 @@ export function OwnerLayout({
     setMobileMenuOpen(false);
   };
   const handleInstall = async () => {
+    if (isIos && !canInstall) {
+      toast.info("iPhone: Safari'da Share -> Add to Home Screen orqali o'rnating");
+      setMobileMenuOpen(false);
+      return;
+    }
+
     await install();
     setMobileMenuOpen(false);
   };
