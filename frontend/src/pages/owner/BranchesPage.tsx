@@ -131,7 +131,7 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       {/* Mobile FAB */}
       <button
         onClick={openCreate}
-        className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+        className="lg:hidden fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
         aria-label="Filial qo'shish">
 
         <Plus className="h-7 w-7" />
