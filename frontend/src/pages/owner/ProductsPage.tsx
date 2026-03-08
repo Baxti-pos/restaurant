@@ -9,6 +9,8 @@ import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import { toast } from '../../components/ui/Toast';
 import { Plus, Edit2, Trash2, ShoppingBag, Search, Tag } from 'lucide-react';
 import { api } from '../../lib/api';
+import { getAuth } from '../../lib/auth';
+import { hasPermission } from '../../lib/permissions';
 import { Category, Product } from '../../lib/types';
 import { formatCurrency } from '../../lib/formatters';
 import { clsx } from 'clsx';
@@ -20,6 +22,8 @@ export function ProductsPage({
   activeBranchId,
   activeBranchName
 }: ProductsPageProps) {
+  const authUser = getAuth().user;
+  const canManageProducts = hasPermission(authUser, 'PRODUCTS_MANAGE');
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +77,7 @@ export function ProductsPage({
   });
   // Category handlers
   const openCreateCat = () => {
+    if (!canManageProducts) return;
     setEditingCat(null);
     setCatName('');
     setCatNameError('');
@@ -82,6 +87,7 @@ export function ProductsPage({
     });
   };
   const openEditCat = (c: Category) => {
+    if (!canManageProducts) return;
     setEditingCat(c);
     setCatName(c.name);
     setCatNameError('');
@@ -92,6 +98,7 @@ export function ProductsPage({
   };
   const handleSaveCat = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageProducts) return;
     if (!catName.trim()) {
       setCatNameError("Bu maydon to'ldirilishi shart");
       return;
@@ -124,6 +131,7 @@ export function ProductsPage({
     }
   };
   const handleDeleteCat = async () => {
+    if (!canManageProducts) return;
     if (!deleteCat) return;
     setDeletingCat(true);
     try {
@@ -140,6 +148,7 @@ export function ProductsPage({
   };
   // Product handlers
   const openCreateProd = () => {
+    if (!canManageProducts) return;
     setEditingProd(null);
     setProdForm({
       name: '',
@@ -154,6 +163,7 @@ export function ProductsPage({
     });
   };
   const openEditProd = (p: Product) => {
+    if (!canManageProducts) return;
     setEditingProd(p);
     setProdForm({
       name: p.name,
@@ -178,6 +188,7 @@ export function ProductsPage({
   };
   const handleSaveProd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageProducts) return;
     if (!validateProd()) return;
     setSavingProd(true);
     try {
@@ -207,6 +218,7 @@ export function ProductsPage({
     }
   };
   const handleDeleteProd = async () => {
+    if (!canManageProducts) return;
     if (!deleteProd) return;
     setDeletingProd(true);
     try {
@@ -263,15 +275,17 @@ export function ProductsPage({
 
             })}
             </div>
+            {canManageProducts &&
             <Button
-            variant="ghost"
-            size="sm"
-            onClick={openCreateCat}
-            className="w-full mt-2 text-xs">
+              variant="ghost"
+              size="sm"
+              onClick={openCreateCat}
+              className="w-full mt-2 text-xs">
 
-              <Plus className="h-3 w-3 mr-1" />
-              Kategoriya qo'shish
-            </Button>
+                <Plus className="h-3 w-3 mr-1" />
+                Kategoriya qo'shish
+              </Button>
+            }
           </div>
 
           {/* Desktop Categories Panel */}
@@ -280,10 +294,12 @@ export function ProductsPage({
               <h3 className="text-sm font-semibold text-slate-900">
                 Kategoriyalar
               </h3>
+              {canManageProducts &&
               <Button size="sm" variant="ghost" onClick={openCreateCat}>
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Qo'shish
-              </Button>
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Qo'shish
+                </Button>
+              }
             </div>
             {categories.length === 0 ?
           <div className="py-10 text-center">
@@ -325,9 +341,10 @@ export function ProductsPage({
                           {count} ta
                         </span>
                       </div>
+                      {canManageProducts &&
                       <div
-                    className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}>
+                        className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}>
 
                         <button
                       onClick={() => openEditCat(c)}
@@ -342,6 +359,7 @@ export function ProductsPage({
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      }
                     </div>);
 
             })}
@@ -362,6 +380,7 @@ export function ProductsPage({
 
               </div>
               {/* Mobile: Icon only button */}
+              {canManageProducts &&
               <div className="md:hidden">
                 <Button
                 variant="primary"
@@ -372,13 +391,16 @@ export function ProductsPage({
                   <Plus className="h-5 w-5" />
                 </Button>
               </div>
+              }
               {/* Desktop: Full button */}
+              {canManageProducts &&
               <div className="hidden md:block">
                 <Button variant="primary" onClick={openCreateProd}>
                   <Plus className="h-4 w-4 mr-1.5" />
                   Mahsulot qo'shish
                 </Button>
               </div>
+              }
             </div>
 
             {filteredProducts.length === 0 ?
@@ -420,6 +442,7 @@ export function ProductsPage({
                     }
                         </div>
                       </div>
+                      {canManageProducts &&
                       <div className="flex flex-col gap-1">
                         <button
                     onClick={() => openEditProd(p)}
@@ -434,6 +457,7 @@ export function ProductsPage({
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
+                      }
                     </div>
               )}
                 </div>
@@ -455,9 +479,11 @@ export function ProductsPage({
                         <th className="px-4 py-3 text-left font-medium">
                           Holat
                         </th>
+                        {canManageProducts &&
                         <th className="px-4 py-3 text-right font-medium">
-                          Amallar
-                        </th>
+                            Amallar
+                          </th>
+                        }
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -487,6 +513,7 @@ export function ProductsPage({
                               </Badge>
                       }
                           </td>
+                          {canManageProducts &&
                           <td className="px-4 py-3 text-right space-x-1">
                             <button
                         onClick={() => openEditProd(p)}
@@ -501,6 +528,7 @@ export function ProductsPage({
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </td>
+                          }
                         </tr>
                   )}
                     </tbody>
@@ -513,6 +541,7 @@ export function ProductsPage({
       }
 
       {/* Mobile FAB */}
+      {canManageProducts &&
       <button
         onClick={openCreateProd}
         className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -520,6 +549,7 @@ export function ProductsPage({
 
         <Plus className="h-7 w-7" />
       </button>
+      }
 
       {/* Category modal */}
       <Modal

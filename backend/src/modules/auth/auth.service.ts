@@ -2,15 +2,17 @@ import type { UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { Prisma } from "@prisma/client";
+import { isValidPermission, type AppPermission } from "../../constants/permissions.js";
 import { config } from "../../config.js";
 import { prisma } from "../../prisma.js";
 
-export type AppRole = "OWNER" | "WAITER";
+export type AppRole = "OWNER" | "MANAGER" | "WAITER";
 
 export interface AppJwtPayload {
   sub: string;
   role: AppRole;
   fullName: string;
+  permissions: AppPermission[];
   branchId: string | null;
   activeBranchId: string | null;
   tokenType: "access";
@@ -48,13 +50,42 @@ const mapRole = (role: UserRole): AppRole => {
     return "OWNER";
   }
 
+  if (role === "MANAGER") {
+    return "MANAGER";
+  }
+
   return "WAITER";
+};
+
+const normalizePermissions = (values: unknown) => {
+  if (!Array.isArray(values)) {
+    return [] as AppPermission[];
+  }
+
+  const unique: AppPermission[] = [];
+  const seen = new Set<AppPermission>();
+
+  for (const value of values) {
+    if (!isValidPermission(value)) {
+      continue;
+    }
+
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    unique.push(value);
+  }
+
+  return unique;
 };
 
 const buildTokenPayload = (params: {
   userId: string;
   role: AppRole;
   fullName: string;
+  permissions: AppPermission[];
   branchId: string | null;
   activeBranchId: string | null;
 }): AppJwtPayload => {
@@ -62,6 +93,7 @@ const buildTokenPayload = (params: {
     sub: params.userId,
     role: params.role,
     fullName: params.fullName,
+    permissions: params.permissions,
     branchId: params.branchId,
     activeBranchId: params.activeBranchId,
     tokenType: "access"
@@ -99,8 +131,8 @@ const parseRequiredPhoneField = (value: unknown) => {
 };
 
 const ensureOwnerContext = (ctx: OwnerProfileContext) => {
-  if (ctx.role !== "OWNER") {
-    throw new AuthError(403, "Faqat owner profili uchun ruxsat berilgan");
+  if (ctx.role !== "OWNER" && ctx.role !== "MANAGER") {
+    throw new AuthError(403, "Faqat owner yoki manager profili uchun ruxsat berilgan");
   }
 };
 
@@ -148,7 +180,9 @@ export const verifyAccessToken = (token: string): AppJwtPayload => {
   if (
     candidate.tokenType !== "access" ||
     typeof candidate.sub !== "string" ||
-    (candidate.role !== "OWNER" && candidate.role !== "WAITER") ||
+    (candidate.role !== "OWNER" &&
+      candidate.role !== "MANAGER" &&
+      candidate.role !== "WAITER") ||
     typeof candidate.fullName !== "string"
   ) {
     throw new AuthError(401, "Token yaroqsiz");
@@ -158,6 +192,7 @@ export const verifyAccessToken = (token: string): AppJwtPayload => {
     sub: candidate.sub,
     role: candidate.role,
     fullName: candidate.fullName,
+    permissions: normalizePermissions(candidate.permissions),
     branchId: typeof candidate.branchId === "string" ? candidate.branchId : null,
     activeBranchId:
       typeof candidate.activeBranchId === "string" ? candidate.activeBranchId : null,
@@ -167,10 +202,9 @@ export const verifyAccessToken = (token: string): AppJwtPayload => {
 
 export const authService = {
   async login(input: LoginInput) {
-    const phone = typeof input.phone === "string" ? input.phone.trim() : "";
-    const password = typeof input.password === "string" ? input.password : "";
-
-    if (!phone || !password) {
+    const phone = parseRequiredPhoneField(input.phone);
+    const password = typeof input.password === "string" ? input.password.trim() : "";
+    if (!password) {
       throw new AuthError(400, "Telefon raqam va parol kiritilishi shart");
     }
 
@@ -194,6 +228,27 @@ export const authService = {
             address: true,
             isActive: true
           }
+        },
+        managerBranches: {
+          where: {
+            isActive: true,
+            branch: {
+              isActive: true
+            }
+          },
+          orderBy: {
+            createdAt: "asc"
+          },
+          select: {
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+                isActive: true
+              }
+            }
+          }
         }
       }
     });
@@ -212,27 +267,40 @@ export const authService = {
     }
 
     const role = mapRole(user.role);
+    const permissions = role === "MANAGER" ? normalizePermissions(user.permissions) : [];
     const userBranchId = user.branchId ?? null;
+
+    const branches =
+      role === "OWNER"
+        ? user.ownedBranches
+        : role === "MANAGER"
+          ? user.managerBranches.map((assignment) => assignment.branch)
+        : user.branch
+          ? [user.branch]
+          : [];
+
+    if (role === "MANAGER" && branches.length === 0) {
+      throw new AuthError(403, "Manager uchun faol filial biriktirilmagan");
+    }
+
     const requiresBranchSelection = role === "OWNER";
     const activeBranchId =
-      role === "WAITER" ? (userBranchId ?? null) : null;
+      role === "WAITER"
+        ? (userBranchId ?? null)
+        : role === "MANAGER"
+          ? branches[0]?.id ?? null
+          : null;
 
     const accessToken = signAccessToken(
       buildTokenPayload({
         userId: user.id,
         role,
         fullName: user.fullName,
+        permissions,
         branchId: userBranchId,
         activeBranchId
       })
     );
-
-    const branches =
-      role === "OWNER"
-        ? user.ownedBranches
-        : user.branch
-          ? [user.branch]
-          : [];
 
     return {
       accessToken,
@@ -242,6 +310,7 @@ export const authService = {
         fullName: user.fullName,
         phone: user.phone,
         role,
+        permissions,
         branchId: userBranchId,
         activeBranchId
       },
@@ -256,8 +325,8 @@ export const authService = {
       throw new AuthError(400, "branchId yuborilishi shart");
     }
 
-    if (input.role !== "OWNER") {
-      throw new AuthError(403, "Faqat owner filial tanlashi mumkin");
+    if (input.role !== "OWNER" && input.role !== "MANAGER") {
+      throw new AuthError(403, "Faqat owner yoki manager filial tanlashi mumkin");
     }
 
     const user = await prisma.user.findUnique({
@@ -266,6 +335,7 @@ export const authService = {
         id: true,
         fullName: true,
         role: true,
+        permissions: true,
         branchId: true,
         isActive: true
       }
@@ -279,29 +349,60 @@ export const authService = {
       throw new AuthError(403, "Foydalanuvchi faol emas");
     }
 
-    const branch = await prisma.branch.findFirst({
-      where: {
-        id: branchId,
-        ownerId: user.id,
-        isActive: true
-      },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        isActive: true
-      }
-    });
+    const role = mapRole(user.role);
+    const permissions = role === "MANAGER" ? normalizePermissions(user.permissions) : [];
+
+    const branch =
+      input.role === "OWNER"
+        ? await prisma.branch.findFirst({
+            where: {
+              id: branchId,
+              ownerId: user.id,
+              isActive: true
+            },
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              isActive: true
+            }
+          })
+        : await prisma.managerBranch.findFirst({
+            where: {
+              managerId: user.id,
+              branchId,
+              isActive: true,
+              branch: {
+                isActive: true
+              }
+            },
+            select: {
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                  address: true,
+                  isActive: true
+                }
+              }
+            }
+          }).then((row) => row?.branch ?? null);
 
     if (!branch) {
-      throw new AuthError(404, "Filial topilmadi yoki sizga tegishli emas");
+      throw new AuthError(
+        404,
+        input.role === "OWNER"
+          ? "Filial topilmadi yoki sizga tegishli emas"
+          : "Filial topilmadi yoki sizga biriktirilmagan"
+      );
     }
 
     const accessToken = signAccessToken(
       buildTokenPayload({
         userId: user.id,
-        role: mapRole(user.role),
+        role,
         fullName: user.fullName,
+        permissions,
         branchId: user.branchId ?? null,
         activeBranchId: branch.id
       })
@@ -319,7 +420,9 @@ export const authService = {
     const user = await prisma.user.findFirst({
       where: {
         id: ctx.userId,
-        role: "OWNER"
+        role: {
+          in: ["OWNER", "MANAGER"]
+        }
       },
       select: {
         id: true,
@@ -333,7 +436,7 @@ export const authService = {
     });
 
     if (!user) {
-      throw new AuthError(404, "Owner topilmadi");
+      throw new AuthError(404, "Foydalanuvchi topilmadi");
     }
 
     if (!user.isActive) {
@@ -367,7 +470,9 @@ export const authService = {
     const owner = await prisma.user.findFirst({
       where: {
         id: ctx.userId,
-        role: "OWNER"
+        role: {
+          in: ["OWNER", "MANAGER"]
+        }
       },
       select: {
         id: true,
@@ -375,13 +480,14 @@ export const authService = {
         phone: true,
         role: true,
         branchId: true,
+        permissions: true,
         isActive: true,
         passwordHash: true
       }
     });
 
     if (!owner) {
-      throw new AuthError(404, "Owner topilmadi");
+      throw new AuthError(404, "Foydalanuvchi topilmadi");
     }
 
     if (!owner.isActive) {
@@ -452,6 +558,10 @@ export const authService = {
           userId: updated.id,
           role: mapRole(updated.role),
           fullName: updated.fullName,
+          permissions:
+            mapRole(updated.role) === "MANAGER"
+              ? normalizePermissions(owner.permissions)
+              : [],
           branchId: updated.branchId ?? null,
           activeBranchId: ctx.activeBranchId
         })

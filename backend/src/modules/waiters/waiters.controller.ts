@@ -15,7 +15,7 @@ const handleError = (res: Response, error: unknown) => {
 };
 
 const getContext = (req: Request) => {
-  const ownerId = req.auth?.sub;
+  const ownerId = req.ownerScopeId;
   const branchId = req.activeBranchId;
 
   if (!ownerId) {

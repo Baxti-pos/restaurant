@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
 import { authMiddleware } from "../../middlewares/auth.js";
+import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
+import { requireAnyPermissions, requirePermissions } from "../../middlewares/permissions.js";
 import { requireRoles } from "../../middlewares/roles.js";
 import { reportsController } from "./reports.controller.js";
 export const reportsRouter = Router();
-reportsRouter.use(authMiddleware, requireRoles(["OWNER"]), activeBranchMiddleware);
-reportsRouter.get("/sales-summary", (req, res) => reportsController.salesSummary(req, res));
-reportsRouter.get("/dashboard", (req, res) => reportsController.dashboard(req, res));
-reportsRouter.get("/waiter-activity", (req, res) => reportsController.waiterActivity(req, res));
+reportsRouter.use(authMiddleware, requireRoles(["OWNER", "MANAGER"]), activeBranchMiddleware, branchScopeMiddleware);
+reportsRouter.get("/sales-summary", requireAnyPermissions(["REPORTS_VIEW", "DASHBOARD_VIEW"]), (req, res) => reportsController.salesSummary(req, res));
+reportsRouter.get("/dashboard", requireAnyPermissions(["REPORTS_VIEW", "DASHBOARD_VIEW"]), (req, res) => reportsController.dashboard(req, res));
+reportsRouter.get("/waiter-activity", requirePermissions(["REPORTS_VIEW"]), (req, res) => reportsController.waiterActivity(req, res));

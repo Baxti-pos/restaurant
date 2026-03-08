@@ -168,7 +168,7 @@ export function ProfilePage({ user, onUserChange }: ProfilePageProps) {
     <div className="max-w-2xl space-y-4">
       <div>
         <h1 className="text-lg md:text-xl font-bold text-slate-900">
-          Owner profili
+          Profil
         </h1>
         <p className="text-xs md:text-sm text-slate-500 mt-0.5">
           Asosiy ma'lumotlar va parolni yangilang

@@ -10,19 +10,92 @@ import { ProductsPage } from './pages/owner/ProductsPage';
 import { ExpensesPage } from './pages/owner/ExpensesPage';
 import { OrdersPage } from './pages/owner/OrdersPage';
 import { ProfilePage } from './pages/owner/ProfilePage';
+import { ManagersPage } from './pages/owner/ManagersPage';
 import { ToastProvider } from './components/ui/Toast';
 import { getAuth, setAuth, clearAuth } from './lib/auth';
 import { api } from './lib/api';
 import { User, Branch } from './lib/types';
+import { hasAnyPermission, hasPermission } from './lib/permissions';
 type Page =
 'dashboard' |
 'branches' |
 'waiters' |
+'managers' |
 'tables' |
 'products' |
 'expenses' |
 'orders' |
 'profile';
+
+const canAccessPage = (user: User | null, page: Page) => {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role === 'owner') {
+    return true;
+  }
+
+  if (user.role === 'waiter') {
+    return false;
+  }
+
+  if (page === 'profile') {
+    return true;
+  }
+
+  if (page === 'branches' || page === 'managers') {
+    return false;
+  }
+
+  if (page === 'dashboard') {
+    return hasPermission(user, 'DASHBOARD_VIEW');
+  }
+
+  if (page === 'tables') {
+    return hasPermission(user, 'TABLES_VIEW');
+  }
+
+  if (page === 'orders') {
+    return hasAnyPermission(user, ['ORDERS_VIEW', 'REPORTS_VIEW']);
+  }
+
+  if (page === 'products') {
+    return hasPermission(user, 'PRODUCTS_VIEW');
+  }
+
+  if (page === 'expenses') {
+    return hasPermission(user, 'EXPENSES_VIEW');
+  }
+
+  if (page === 'waiters') {
+    return hasPermission(user, 'WAITERS_VIEW');
+  }
+
+  return false;
+};
+
+const resolveFallbackPage = (user: User | null): Page => {
+  const orderedPages: Page[] = [
+  'dashboard',
+  'tables',
+  'orders',
+  'products',
+  'expenses',
+  'waiters',
+  'branches',
+  'managers',
+  'profile'];
+
+
+  for (const page of orderedPages) {
+    if (canAccessPage(user, page)) {
+      return page;
+    }
+  }
+
+  return 'profile';
+};
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -34,6 +107,13 @@ export function App() {
   const refreshBranches = async () => {
     const list = await api.branches.list();
     setBranches(list);
+    const auth = getAuth();
+    if (auth.user && auth.token) {
+      setAuth({
+        ...auth,
+        branches: list
+      });
+    }
     return list;
   };
 
@@ -50,9 +130,37 @@ export function App() {
       setIsAuthenticated(true);
 
       if (auth.user.role !== 'owner') {
+        const cachedBranches = Array.isArray(auth.branches) ? auth.branches : [];
+        setBranches(cachedBranches);
+
         if (auth.activeBranchId) {
           setActiveBranchId(auth.activeBranchId);
+          setAppReady(true);
+          return;
         }
+
+        if (auth.user.role === 'manager' && cachedBranches.length > 0) {
+          const fallbackBranchId = cachedBranches[0].id;
+
+          try {
+            const result = await api.auth.selectBranch(fallbackBranchId);
+            setAuth({
+              ...auth,
+              token: result.token,
+              activeBranchId: fallbackBranchId,
+              branches: cachedBranches
+            });
+            setActiveBranchId(fallbackBranchId);
+            setAppReady(true);
+            return;
+          } catch {
+            // login session eskirgan bo'lishi mumkin
+          }
+        }
+
+        clearAuth();
+        setUser(null);
+        setIsAuthenticated(false);
         setAppReady(true);
         return;
       }
@@ -86,7 +194,8 @@ export function App() {
     setAuth({
       user: u,
       token,
-      activeBranchId: initialActiveBranchId
+      activeBranchId: initialActiveBranchId,
+      branches: initialBranches
     });
     setActiveBranchId(initialActiveBranchId);
     setBranches(initialBranches);
@@ -116,7 +225,7 @@ export function App() {
       });
 
       setActiveBranchId(branchId);
-      setCurrentPage('dashboard');
+      setCurrentPage((prev) => (canAccessPage(user, prev as Page) ? prev : resolveFallbackPage(user)));
     } catch {
       setActiveBranchId(null);
     }
@@ -154,6 +263,16 @@ export function App() {
     });
   };
 
+  useEffect(() => {
+    if (!user || !activeBranchId) {
+      return;
+    }
+
+    if (!canAccessPage(user, currentPage)) {
+      setCurrentPage(resolveFallbackPage(user));
+    }
+  }, [activeBranchId, currentPage, user]);
+
   const handleUserChange = (nextUser: User, nextToken?: string) => {
     const auth = getAuth();
     const resolvedToken = nextToken && nextToken.trim() ? nextToken : auth.token;
@@ -166,7 +285,8 @@ export function App() {
     setAuth({
       user: nextUser,
       token: resolvedToken,
-      activeBranchId: auth.activeBranchId
+      activeBranchId: auth.activeBranchId,
+      branches: auth.branches ?? []
     });
   };
   if (!appReady) {
@@ -199,6 +319,7 @@ export function App() {
       </>);
 
   }
+
   const activeBranch = branches.find((b) => b.id === activeBranchId);
   const activeBranchName = activeBranch?.name || '';
   return (
@@ -228,6 +349,9 @@ export function App() {
           activeBranchId={activeBranchId}
           activeBranchName={activeBranchName} />
 
+        }
+        {currentPage === 'managers' &&
+        <ManagersPage branches={branches} />
         }
         {currentPage === 'tables' &&
         <TablesPage

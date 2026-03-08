@@ -57,7 +57,7 @@ export const authController = {
                 activeBranchId: req.auth.activeBranchId
             });
             return res.status(200).json({
-                message: "Owner profili",
+                message: "Profil malumoti",
                 data: result
             });
         }
@@ -78,7 +78,7 @@ export const authController = {
                 activeBranchId: req.auth.activeBranchId
             }, req.body ?? {});
             return res.status(200).json({
-                message: "Owner profili yangilandi",
+                message: "Profil yangilandi",
                 data: result
             });
         }

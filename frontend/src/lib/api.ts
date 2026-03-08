@@ -1,5 +1,6 @@
 import { getAuth } from './auth';
 import { toLocalDateKey, todayStr } from './formatters';
+import { hasPermission } from './permissions';
 import {
   Branch,
   Waiter,
@@ -11,13 +12,14 @@ import {
   Expense,
   User,
   OwnerProfile,
+  Manager,
   DashboardStats,
   WaiterActivity,
   PaymentType,
   ExpenseType } from
 './types';
 
-type BackendRole = 'OWNER' | 'WAITER';
+type BackendRole = 'OWNER' | 'MANAGER' | 'WAITER';
 type BackendTableStatus = 'AVAILABLE' | 'OCCUPIED' | 'DISABLED';
 type BackendOrderStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
 type BackendPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MIXED';
@@ -40,6 +42,7 @@ interface BackendAuthUser {
   fullName: string;
   phone: string | null;
   role: BackendRole;
+  permissions?: string[];
   branchId: string | null;
   activeBranchId: string | null;
 }
@@ -56,6 +59,25 @@ interface BackendOwnerProfile {
   fullName: string;
   phone: string | null;
   role: BackendRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BackendManagerBranch {
+  id: string;
+  name: string;
+  address: string | null;
+  isActive: boolean;
+}
+
+interface BackendManager {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  permissions: string[];
+  role: BackendRole;
+  isActive: boolean;
+  branches: BackendManagerBranch[];
   createdAt: string;
   updatedAt: string;
 }
@@ -297,13 +319,19 @@ const request = async <T>(
 };
 
 const mapRole = (role: BackendRole): User['role'] =>
-role === 'OWNER' ? 'owner' : 'waiter';
+role === 'OWNER' ? 'owner' :
+role === 'MANAGER' ? 'manager' :
+'waiter';
 
 const mapUser = (user: BackendAuthUser): User => ({
   id: user.id,
   name: user.fullName,
   phone: user.phone ?? '',
-  role: mapRole(user.role)
+  role: mapRole(user.role),
+  permissions:
+  Array.isArray(user.permissions) ?
+  user.permissions.filter((permission): permission is string => typeof permission === 'string') :
+  []
 });
 
 const mapOwnerProfile = (profile: BackendOwnerProfile): OwnerProfile => ({
@@ -313,6 +341,25 @@ const mapOwnerProfile = (profile: BackendOwnerProfile): OwnerProfile => ({
   role: mapRole(profile.role),
   createdAt: profile.createdAt,
   updatedAt: profile.updatedAt
+});
+
+const mapManager = (manager: BackendManager): Manager => ({
+  id: manager.id,
+  fullName: manager.fullName,
+  phone: manager.phone ?? '',
+  permissions:
+  Array.isArray(manager.permissions) ?
+  manager.permissions.filter((permission): permission is string => typeof permission === 'string') :
+  [],
+  isActive: manager.isActive,
+  branches: (manager.branches ?? []).map((branch) => ({
+    id: branch.id,
+    name: branch.name,
+    address: branch.address ?? '',
+    isActive: branch.isActive
+  })),
+  createdAt: manager.createdAt,
+  updatedAt: manager.updatedAt
 });
 
 const mapBranch = (branch: BackendBranch): Branch => ({
@@ -726,6 +773,69 @@ export const api = {
     }
   },
 
+  managers: {
+    listPermissions: async (): Promise<
+      Array<{
+        key: string;
+        label: string;
+        description: string;
+      }>
+    > => {
+      const data = await request<{
+        permissions: string[];
+        predefined: Array<{key: string;label: string;description: string;}>;
+      }>('/managers/permissions');
+
+      return data.predefined ?? [];
+    },
+
+    list: async (): Promise<Manager[]> => {
+      const rows = await request<BackendManager[]>('/managers');
+      return rows.map(mapManager);
+    },
+
+    create: async (payload: {
+      fullName: string;
+      phone: string;
+      password: string;
+      branchIds: string[];
+      permissions: string[];
+      isActive?: boolean;
+    }): Promise<Manager> => {
+      const created = await request<BackendManager>('/managers', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      return mapManager(created);
+    },
+
+    update: async (
+      id: string,
+      payload: {
+        fullName?: string;
+        phone?: string;
+        password?: string;
+        branchIds?: string[];
+        permissions?: string[];
+        isActive?: boolean;
+      }
+    ): Promise<Manager> => {
+      const updated = await request<BackendManager>(`/managers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      return mapManager(updated);
+    },
+
+    delete: async (id: string): Promise<void> => {
+      await request<{id: string;}>(`/managers/${id}`, {
+        method: 'DELETE'
+      });
+    }
+  },
+
   tables: {
     listByBranch: async (_branchId: string): Promise<TableItem[]> => {
       const rows = await request<BackendTable[]>('/tables');
@@ -973,7 +1083,8 @@ export const api = {
 
     updateItems: async (id: string, items: OrderItem[]): Promise<Order> => {
       const currentOrder = await request<BackendOrder>(`/orders/${id}`);
-      const isOwner = getAuth().user?.role === 'owner';
+      const authUser = getAuth().user;
+      const canEditItems = hasPermission(authUser, 'ORDERS_EDIT');
 
       const currentItemsMap = new Map(currentOrder.items.map((item) => [item.id, item]));
       const nextItemsMap = new Map(
@@ -983,7 +1094,7 @@ export const api = {
       );
 
       for (const currentItem of currentOrder.items) {
-        if (!nextItemsMap.has(currentItem.id) && isOwner) {
+        if (!nextItemsMap.has(currentItem.id) && canEditItems) {
           await request<{ order: BackendOrder }>(`/orders/${id}/items/${currentItem.id}`, {
             method: 'DELETE'
           });
@@ -1001,7 +1112,7 @@ export const api = {
         const currentPrice = toNumber(currentItem.unitPrice);
         const nextPrice = toNumber(nextItem.price);
 
-        if (!isOwner && nextQty > currentQty && currentItem.productId) {
+        if (!canEditItems && nextQty > currentQty && currentItem.productId) {
           await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
             method: 'POST',
             body: JSON.stringify({
@@ -1012,7 +1123,7 @@ export const api = {
           continue;
         }
 
-        if (isOwner && (currentQty !== nextQty || Math.abs(currentPrice - nextPrice) > 0.0001)) {
+        if (canEditItems && (currentQty !== nextQty || Math.abs(currentPrice - nextPrice) > 0.0001)) {
           await request<{ order: BackendOrder }>(`/orders/${id}/items/${itemId}`, {
             method: 'PATCH',
             body: JSON.stringify({

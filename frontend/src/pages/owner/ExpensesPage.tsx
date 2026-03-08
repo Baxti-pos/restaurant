@@ -22,6 +22,8 @@ import {
   Zap } from
 'lucide-react';
 import { api } from '../../lib/api';
+import { getAuth } from '../../lib/auth';
+import { hasPermission } from '../../lib/permissions';
 import { Expense, ExpenseType } from '../../lib/types';
 import { formatCurrency, formatDateShort, todayStr } from '../../lib/formatters';
 import { clsx } from 'clsx';
@@ -71,6 +73,8 @@ export function ExpensesPage({
   activeBranchId,
   activeBranchName
 }: ExpensesPageProps) {
+  const authUser = getAuth().user;
+  const canManageExpenses = hasPermission(authUser, 'EXPENSES_MANAGE');
   const [date, setDate] = useState(todayStr());
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,6 +129,7 @@ export function ExpensesPage({
   };
   const handleCreate = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!canManageExpenses) return;
     const e = validateForm(form);
     if (Object.keys(e).length > 0) {
       setFormErrors(e);
@@ -157,6 +162,7 @@ export function ExpensesPage({
     }
   };
   const openEdit = (exp: Expense) => {
+    if (!canManageExpenses) return;
     setEditModal(exp);
     setEditForm({
       type: exp.type,
@@ -168,6 +174,7 @@ export function ExpensesPage({
   };
   const handleEdit = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!canManageExpenses) return;
     const e = validateForm(editForm);
     if (Object.keys(e).length > 0) {
       setEditErrors(e);
@@ -192,6 +199,7 @@ export function ExpensesPage({
     }
   };
   const handleDelete = async () => {
+    if (!canManageExpenses) return;
     if (!deleteTarget) return;
     setDeleting(true);
     try {
@@ -207,6 +215,7 @@ export function ExpensesPage({
   };
   const handleSave = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!canManageExpenses) return;
     const e = validateForm(form);
     if (Object.keys(e).length > 0) {
       setFormErrors(e);
@@ -260,6 +269,7 @@ export function ExpensesPage({
   };
   // Mobile: Open modal for create
   const openCreateModal = () => {
+    if (!canManageExpenses) return;
     setEditing(false);
     setForm({
       type: 'market',
@@ -327,6 +337,7 @@ export function ExpensesPage({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Create form (Desktop only) */}
+        {canManageExpenses &&
         <div className="hidden lg:block bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-900 mb-4">
             Rashod qo'shish
@@ -398,6 +409,7 @@ export function ExpensesPage({
             </div>
           </form>
         </div>
+        }
 
         {/* Expenses list */}
         <div className="lg:col-span-2">
@@ -436,6 +448,7 @@ export function ExpensesPage({
                       <span className="text-xs text-slate-400">
                         {formatDateShort(exp.date)}
                       </span>
+                      {canManageExpenses &&
                       <div className="flex space-x-1">
                         <button
                       onClick={() => openEdit(exp)}
@@ -450,6 +463,7 @@ export function ExpensesPage({
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
+                      }
                     </div>
                   </div>
               )}
@@ -503,6 +517,7 @@ export function ExpensesPage({
                         <td className="px-4 py-3 text-left">
                           {formatDateShort(exp.date)}
                         </td>
+                        {canManageExpenses &&
                         <td className="px-4 py-3 text-right space-x-1">
                           <button
                         onClick={() => openEdit(exp)}
@@ -517,6 +532,7 @@ export function ExpensesPage({
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </td>
+                        }
                       </tr>
                   )}
                   </tbody>
@@ -528,12 +544,14 @@ export function ExpensesPage({
       </div>
 
       {/* Mobile FAB */}
+      {canManageExpenses &&
       <button
         onClick={openCreateModal}
         className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform">
 
         <Plus className="h-7 w-7" />
       </button>
+      }
 
       {/* Edit/Create modal (Shared) */}
       <Modal

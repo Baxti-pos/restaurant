@@ -66,7 +66,7 @@ export const authController = {
       });
 
       return res.status(200).json({
-        message: "Owner profili",
+        message: "Profil malumoti",
         data: result
       });
     } catch (error) {
@@ -92,7 +92,7 @@ export const authController = {
       );
 
       return res.status(200).json({
-        message: "Owner profili yangilandi",
+        message: "Profil yangilandi",
         data: result
       });
     } catch (error) {

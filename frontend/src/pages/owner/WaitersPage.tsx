@@ -8,6 +8,8 @@ import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import { toast } from '../../components/ui/Toast';
 import { Plus, Edit2, Trash2, Users, User, Phone, Send } from 'lucide-react';
 import { api } from '../../lib/api';
+import { getAuth } from '../../lib/auth';
+import { hasPermission } from '../../lib/permissions';
 import { Waiter } from '../../lib/types';
 interface WaitersPageProps {
   activeBranchId: string;
@@ -45,6 +47,8 @@ export function WaitersPage({
   activeBranchId,
   activeBranchName
 }: WaitersPageProps) {
+  const authUser = getAuth().user;
+  const canManageWaiters = hasPermission(authUser, 'WAITERS_MANAGE');
   const [waiters, setWaiters] = useState<Waiter[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -78,6 +82,7 @@ export function WaitersPage({
     load();
   }, [activeBranchId]);
   const openCreate = () => {
+    if (!canManageWaiters) return;
     setEditing(null);
     setForm({
       name: '',
@@ -90,6 +95,7 @@ export function WaitersPage({
     setModalOpen(true);
   };
   const openEdit = (w: Waiter) => {
+    if (!canManageWaiters) return;
     setEditing(w);
     setForm({
       name: w.name,
@@ -119,6 +125,7 @@ export function WaitersPage({
   };
   const handleSave = async (ev: React.FormEvent) => {
     ev.preventDefault();
+    if (!canManageWaiters) return;
     if (!validate()) return;
     const payload = {
       name: form.name,
@@ -145,6 +152,7 @@ export function WaitersPage({
     }
   };
   const handleDelete = async () => {
+    if (!canManageWaiters) return;
     if (!deleteTarget) return;
     setDeleting(true);
     try {
@@ -173,21 +181,26 @@ export function WaitersPage({
           </p>
         </div>
         {/* Mobile: Icon Button */}
+        {canManageWaiters &&
         <div className="md:hidden">
           <Button size="icon" onClick={openCreate}>
             <Plus className="h-5 w-5" />
           </Button>
         </div>
+        }
         {/* Desktop: Full Button */}
+        {canManageWaiters &&
         <div className="hidden md:block">
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" />
             Ofitsant qo'shish
           </Button>
         </div>
+        }
       </div>
 
       {/* Mobile FAB */}
+      {canManageWaiters &&
       <button
         onClick={openCreate}
         className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -195,6 +208,7 @@ export function WaitersPage({
 
         <Plus className="h-7 w-7" />
       </button>
+      }
 
       {loading ?
       <TableSkeleton /> :
@@ -204,10 +218,12 @@ export function WaitersPage({
           <p className="text-slate-500 text-sm">
             Bu filialda hali ofitsantlar yo'q
           </p>
+          {canManageWaiters &&
           <Button className="mt-4" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" />
             Ofitsant qo'shish
           </Button>
+          }
         </div> :
 
       <>
@@ -249,6 +265,7 @@ export function WaitersPage({
                     Ulushi: <span className="font-medium">{w.salesSharePercent}%</span>
                   </p>
                 </div>
+                {canManageWaiters &&
                 <div className="flex flex-col gap-1">
                   <button
                 onClick={() => openEdit(w)}
@@ -263,6 +280,7 @@ export function WaitersPage({
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                }
               </div>
           )}
           </div>
@@ -291,9 +309,11 @@ export function WaitersPage({
                     <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Holat
                     </th>
+                    {canManageWaiters &&
                     <th className="px-5 py-3.5 text-right font-medium">
-                      Amallar
-                    </th>
+                        Amallar
+                      </th>
+                    }
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -331,6 +351,7 @@ export function WaitersPage({
                     <Badge variant="danger">Bloklangan</Badge>
                     }
                       </td>
+                      {canManageWaiters &&
                       <td className="px-5 py-4 text-right space-x-1">
                         <button
                       onClick={() => openEdit(w)}
@@ -345,6 +366,7 @@ export function WaitersPage({
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </td>
+                      }
                     </tr>
                 )}
                 </tbody>

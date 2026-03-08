@@ -23,6 +23,7 @@ import { formatCurrency } from '../../lib/formatters';
 import { printReceipt } from '../../lib/receiptPrinter';
 import { clsx } from 'clsx';
 import { getAuth } from '../../lib/auth';
+import { hasPermission } from '../../lib/permissions';
 interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
@@ -33,7 +34,14 @@ export function TablesPage({
 }: TablesPageProps) {
   const auth = getAuth();
   const user = auth.user;
-  const isOwner = user?.role === 'owner';
+  const canManageTables = hasPermission(user, 'TABLES_MANAGE');
+  const canEditOrderItems = hasPermission(user, 'ORDERS_EDIT');
+  const canCloseOrders = hasPermission(user, 'ORDERS_CLOSE');
+  const canUseAdvancedOrderActions = canEditOrderItems || canCloseOrders;
+  const roleLabel =
+  user?.role === 'owner' ? 'Admin' :
+  user?.role === 'manager' ? 'Menejer' :
+  'Ofitsant';
   // ── Table list state ──────────────────────────────────────────────────────
   const [tables, setTables] = useState<TableItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -107,6 +115,7 @@ export function TablesPage({
   };
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManageTables) return;
     if (!tableName.trim()) {
       setNameError("Bu maydon to'ldirilishi shart");
       return;
@@ -136,6 +145,7 @@ export function TablesPage({
   };
   // ── Delete table ──────────────────────────────────────────────────────────
   const handleDelete = async () => {
+    if (!canManageTables) return;
     if (!deleteTarget) return;
     setDeleting(true);
     try {
@@ -232,7 +242,7 @@ export function TablesPage({
     });
   };
   const handleDecreaseItem = (itemId: string) => {
-    if (!orderModal || !isOwner) return;
+    if (!orderModal || !canEditOrderItems) return;
     const item = orderModal.items.find((i) => i.id === itemId);
     if (!item) return;
     if (item.quantity <= 1) {
@@ -257,7 +267,7 @@ export function TablesPage({
     });
   };
   const handleRemoveItem = (itemId: string) => {
-    if (!isOwner) return;
+    if (!canEditOrderItems) return;
     setDeleteItemConfirm({
       open: true,
       itemId
@@ -405,7 +415,7 @@ export function TablesPage({
                 <th className="py-2 text-right text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   Jami
                 </th>
-                {isOwner && <th className="py-2 w-8" />}
+                {canEditOrderItems && <th className="py-2 w-8" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -416,7 +426,7 @@ export function TablesPage({
                   </td>
                   <td className="py-2.5">
                     <div className="flex items-center justify-center gap-1">
-                      {isOwner &&
+                      {canEditOrderItems &&
                 <button
                   onClick={() => handleDecreaseItem(item.id)}
                   className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm leading-none transition-colors">
@@ -438,7 +448,7 @@ export function TablesPage({
                   <td className="py-2.5 text-right font-medium text-slate-800 tabular-nums text-sm">
                     {formatCurrency(item.price * item.quantity)}
                   </td>
-                  {isOwner &&
+                  {canEditOrderItems &&
             <td className="py-2.5 pl-2">
                       <button
                 onClick={() => handleRemoveItem(item.id)}
@@ -466,7 +476,7 @@ export function TablesPage({
           </span>
         </div>
 
-        {isOwner ?
+        {canUseAdvancedOrderActions ?
       <div className="flex flex-col gap-2">
             {orderModal?.id ?
         <div className="flex gap-2">
@@ -494,13 +504,15 @@ export function TablesPage({
 
                   Saqlash
                 </Button>
+                {canCloseOrders &&
                 <Button
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
-            disabled={!orderModal.items.length}
-            onClick={() => setPaymentOpen(true)}>
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500"
+                  disabled={!orderModal.items.length}
+                  onClick={() => setPaymentOpen(true)}>
 
-                  💳 Yopish
-                </Button>
+                    💳 Yopish
+                  </Button>
+                }
               </div> :
 
         <Button
@@ -532,8 +544,7 @@ export function TablesPage({
             </Button>
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               <p className="text-xs text-amber-700">
-                Buyurtmani yopish faqat administrator tomonidan amalga
-                oshiriladi.
+                Buyurtmani yopish uchun ORDERS_CLOSE ruxsati kerak.
               </p>
             </div>
           </div>
@@ -640,10 +651,12 @@ export function TablesPage({
             </span>
           </p>
         </div>
+        {canManageTables &&
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1.5" />
           Stol qo'shish
         </Button>
+        }
       </div>
 
       {/* Table grid */}
@@ -654,10 +667,12 @@ export function TablesPage({
           <p className="text-slate-500 text-sm">
             Bu filialda hali stollar yo'q
           </p>
+          {canManageTables &&
           <Button className="mt-4" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" />
             Stol qo'shish
           </Button>
+          }
         </div> :
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -672,6 +687,7 @@ export function TablesPage({
               )}
               onClick={() => openOrderDetail(t)}>
 
+                {canManageTables &&
                 <div
                 className="absolute top-2.5 right-2.5 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}>
@@ -689,6 +705,7 @@ export function TablesPage({
                     <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
+                }
                 <div
                 className={clsx(
                   'h-14 w-14 rounded-full flex items-center justify-center text-xl font-bold mb-3',
@@ -707,7 +724,7 @@ export function TablesPage({
       }
 
       {/* Mobile FAB — Stol qo'shish (only visible on mobile, hidden when order sheet is open) */}
-      {!orderModal &&
+      {!orderModal && canManageTables &&
       <button
         onClick={openCreate}
         className="lg:hidden fixed bottom-20 right-4 z-40 h-14 w-14 rounded-full bg-indigo-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -768,12 +785,12 @@ export function TablesPage({
                   <span
                 className={clsx(
                   'inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border',
-                  isOwner ?
+                  canUseAdvancedOrderActions ?
                   'bg-indigo-100 text-indigo-700 border-indigo-200' :
                   'bg-amber-100 text-amber-700 border-amber-200'
                 )}>
 
-                    {isOwner ? '👑 Admin' : '🧑‍🍳 Ofitsant'}
+                    {roleLabel}
                   </span>
                 </div>
             }
@@ -813,7 +830,7 @@ export function TablesPage({
                   Stol: {orderModal.tableName}
                 </span>
                 <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                  {isOwner ? 'Admin' : 'Ofitsant'}
+                  {roleLabel}
                 </span>
               </div>
               <button
@@ -874,7 +891,7 @@ export function TablesPage({
                             </p>
                           </div>
                           <div className="flex items-center gap-2 bg-slate-50 rounded-lg p-1">
-                            {isOwner &&
+                            {canEditOrderItems &&
                     <button
                       onClick={() => handleDecreaseItem(item.id)}
                       className="w-7 h-7 rounded-md bg-white border border-slate-200 flex items-center justify-center text-slate-600 font-bold">
@@ -1016,7 +1033,7 @@ export function TablesPage({
 
                       Saqlash
                     </Button>
-                    {isOwner &&
+                    {canCloseOrders &&
                 <Button
                   className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700"
                   disabled={!orderModal.items.length}

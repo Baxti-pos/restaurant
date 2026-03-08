@@ -39,6 +39,7 @@ const buildWaiterTokenPayload = (params: {
     sub: params.userId,
     role: "WAITER",
     fullName: params.fullName,
+    permissions: [],
     branchId: params.branchId,
     activeBranchId: params.branchId,
     tokenType: "access"
@@ -113,6 +114,7 @@ export const telegramService = {
         id: user.id,
         fullName: user.fullName,
         role: "WAITER" as const,
+        permissions: [],
         branchId: user.branchId,
         activeBranchId: user.branchId,
         telegramUserId: user.telegramUserId?.toString() ?? null

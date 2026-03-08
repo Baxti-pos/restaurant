@@ -18,6 +18,8 @@ import {
   Users } from
 'lucide-react';
 import { api } from '../../lib/api';
+import { getAuth } from '../../lib/auth';
+import { hasPermission } from '../../lib/permissions';
 import { Order, WaiterActivity } from '../../lib/types';
 import {
   formatCurrency,
@@ -58,27 +60,59 @@ export function OrdersPage({
   activeBranchId,
   activeBranchName
 }: OrdersPageProps) {
-  const [tab, setTab] = useState<Tab>('orders');
+  const authUser = getAuth().user;
+  const canOrdersView = hasPermission(authUser, 'ORDERS_VIEW');
+  const canReportsView = hasPermission(authUser, 'REPORTS_VIEW');
+  const availableTabs: {
+    id: Tab;
+    label: string;
+  }[] = [];
+
+  if (canOrdersView) {
+    availableTabs.push({
+      id: 'orders',
+      label: 'Sotuvlar'
+    });
+  }
+
+  if (canReportsView) {
+    availableTabs.push(
+      {
+        id: 'daily',
+        label: 'Kunlik hisobot'
+      },
+      {
+        id: 'monthly',
+        label: 'Oylik hisobot'
+      },
+      {
+        id: 'waiters',
+        label: 'Ofitsant faoliyati'
+      }
+    );
+  }
+
+  const initialTab = (availableTabs[0]?.id ?? 'orders') as Tab;
+  const [tab, setTab] = useState<Tab>(initialTab);
+  useEffect(() => {
+    if (!availableTabs.some((item) => item.id === tab)) {
+      setTab(initialTab);
+    }
+  }, [tab, initialTab, availableTabs]);
+
+  if (!canOrdersView && !canReportsView) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+        <p className="text-slate-500 text-sm">
+          Ushbu sahifani korish uchun ruxsat yoq
+        </p>
+      </div>);
+  }
+
   const tabs: {
     id: Tab;
     label: string;
-  }[] = [
-  {
-    id: 'orders',
-    label: 'Sotuvlar'
-  },
-  {
-    id: 'daily',
-    label: 'Kunlik hisobot'
-  },
-  {
-    id: 'monthly',
-    label: 'Oylik hisobot'
-  },
-  {
-    id: 'waiters',
-    label: 'Ofitsant faoliyati'
-  }];
+  }[] = availableTabs;
 
   return (
     <div className="space-y-5">
