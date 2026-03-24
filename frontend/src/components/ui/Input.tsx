@@ -1,12 +1,14 @@
 import React, { forwardRef, useEffect, useState } from 'react';
+
 import { clsx } from 'clsx';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Eye, EyeOff, X } from 'lucide-react';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   hint?: string;
   icon?: React.ReactNode;
+  calendarPosition?: 'up' | 'down';
 }
 
 function parseIsoDate(value?: string): Date | null {
@@ -63,7 +65,8 @@ function DateInputField({
   disabled,
   name,
   min,
-  max
+  max,
+  calendarPosition = 'down'
 }: InputProps & {
   inputRef: React.ForwardedRef<HTMLInputElement>;
 }) {
@@ -170,20 +173,37 @@ function DateInputField({
           disabled={disabled}
           onClick={() => setOpen((prev) => !prev)}
           className={clsx(
-            'baxti-date-input flex h-11 w-full items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50',
+            'baxti-date-input flex h-11 w-full items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm transition-all duration-300 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/30 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50',
             displayValue ? 'text-slate-700' : 'text-slate-400',
-            error && 'border-red-400 focus:ring-red-400 focus:border-red-400',
+            error && 'border-red-400 focus:ring-red-500/30 focus:border-red-500',
             className
           )}>
 
-          <span className="truncate text-left">
+          <span className="truncate text-left pr-6">
             {displayValue || placeholder || 'Sanani tanlang'}
           </span>
           <CalendarDays className="ml-auto h-4 w-4 text-indigo-500" />
         </button>
 
+        {!required && displayValue && !disabled && (
+          <button
+            type="button"
+            className="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors z-10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              emitChange('');
+            }}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+
         {open &&
-        <div className="absolute z-50 mt-2 w-[300px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div className={clsx(
+          "absolute z-50 w-[300px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-3 shadow-lg",
+          calendarPosition === 'up' ? "bottom-full mb-2" : "mt-2"
+        )}>
             <div className="mb-3 flex items-center justify-between">
               <button
                 type="button"
@@ -316,9 +336,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           }
           <input
             className={clsx(
-              'flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 transition-all',
+              'flex h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-[3px] focus:ring-indigo-500/30 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300',
               icon && 'pl-10',
-              error && 'border-red-400 focus:ring-red-400 focus:border-red-400',
+              error && 'border-red-400 focus:ring-red-500/30 focus:border-red-500',
               className
             )}
             ref={ref}

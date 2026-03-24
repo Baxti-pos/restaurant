@@ -119,5 +119,58 @@ export const waitersController = {
     } catch (error) {
       return handleError(res, error);
     }
+  },
+
+  async getShifts(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+      }
+
+      const data = await waitersService.getShifts(ctx.ownerId, ctx.branchId, req.params.waiterId);
+      return res.status(200).json({
+        message: "Waiter smenalari ro'yxati",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
+  async openShift(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      const managerId = req.auth?.sub;
+      if (!ctx || !managerId) {
+        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+      }
+
+      const data = await waitersService.openShift(ctx.ownerId, ctx.branchId, req.params.waiterId, managerId, req.body);
+      return res.status(201).json({
+        message: "Smena ochildi",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
+  async closeShift(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      const managerId = req.auth?.sub;
+      if (!ctx || !managerId) {
+        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+      }
+
+      const data = await waitersService.closeShift(ctx.ownerId, ctx.branchId, req.params.waiterId, managerId, req.body);
+      return res.status(200).json({
+        message: "Smena yopildi",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
   }
 };

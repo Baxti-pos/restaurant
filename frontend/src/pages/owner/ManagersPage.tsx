@@ -219,15 +219,10 @@ export function ManagersPage({ branches }: ManagersPageProps) {
             Menejer yaratish, filialga biriktirish va permission tanlash
           </p>
         </div>
-        <div className="md:hidden">
-          <Button size="icon" onClick={openCreate}>
-            <Plus className="h-5 w-5" />
-          </Button>
-        </div>
         <div className="hidden md:block">
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Menejer qoshish
+            Menejer qo'shish
           </Button>
         </div>
       </div>

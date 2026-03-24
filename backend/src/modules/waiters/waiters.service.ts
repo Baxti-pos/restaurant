@@ -135,10 +135,16 @@ const serializeWaiter = (waiter: {
   branchId: string | null;
   createdAt: Date;
   updatedAt: Date;
-}) => ({
-  ...waiter,
-  salesSharePercent: Number(waiter.salesSharePercent)
-});
+  waiterShifts?: any[];
+}) => {
+  const { waiterShifts, ...rest } = waiter;
+  return {
+    ...rest,
+    name: rest.fullName,
+    salesSharePercent: Number(rest.salesSharePercent),
+    shiftStatus: (waiterShifts && waiterShifts.length > 0 ? "active" : "not_started") as any
+  };
+};
 
 const mapPrismaError = (error: unknown) => {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -150,7 +156,7 @@ const mapPrismaError = (error: unknown) => {
   return error;
 };
 
-const ensureOwnedActiveBranch = async (ownerId: string, branchId: string) => {
+export const ensureOwnedActiveBranch = async (ownerId: string, branchId: string) => {
   const branch = await prisma.branch.findFirst({
     where: {
       id: branchId,
@@ -174,7 +180,11 @@ const waiterSelect = {
   isActive: true,
   branchId: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  waiterShifts: {
+    where: { status: "OPEN" },
+    take: 1
+  }
 } as const;
 
 export const waitersService = {
@@ -331,5 +341,102 @@ export const waitersService = {
     });
 
     return serializeWaiter(waiter);
+  },
+
+  async getShifts(ownerId: string, branchId: string, waiterIdRaw: unknown) {
+    await ensureOwnedActiveBranch(ownerId, branchId);
+    const waiterId = parseRequiredString(waiterIdRaw, "Waiter ID");
+
+    const shifts = await prisma.waiterShift.findMany({
+      where: {
+        branchId,
+        waiterId,
+      },
+      orderBy: { openedAt: "desc" },
+      include: {
+        openedBy: { select: { fullName: true } },
+        closedBy: { select: { fullName: true } }
+      }
+    });
+
+    return shifts.map(s => ({
+      ...s,
+      startingCash: Number(s.startingCash),
+      endingCash: s.endingCash ? Number(s.endingCash) : null
+    }));
+  },
+
+  async openShift(ownerId: string, branchId: string, waiterIdRaw: unknown, managerId: string, payload: unknown) {
+    await ensureOwnedActiveBranch(ownerId, branchId);
+    const waiterId = parseRequiredString(waiterIdRaw, "Waiter ID");
+
+    const openShift = await prisma.waiterShift.findFirst({
+      where: { branchId, waiterId, status: "OPEN" }
+    });
+
+    if (openShift) {
+      throw new WaitersError(400, "Ushbu girgitton uchun ochiq smena mavjud");
+    }
+
+    const startingCash = isObject(payload) && typeof payload.startingCash === 'number' ? payload.startingCash : 0;
+    const openingNote = isObject(payload) && typeof payload.openingNote === 'string' ? payload.openingNote : null;
+
+    const shift = await prisma.waiterShift.create({
+      data: {
+        branchId,
+        waiterId,
+        openedById: managerId,
+        status: "OPEN",
+        startingCash,
+        openingNote
+      },
+      include: {
+        openedBy: { select: { fullName: true } },
+        closedBy: { select: { fullName: true } }
+      }
+    });
+
+    return {
+      ...shift,
+      startingCash: Number(shift.startingCash),
+      endingCash: null
+    };
+  },
+
+  async closeShift(ownerId: string, branchId: string, waiterIdRaw: unknown, managerId: string, payload: unknown) {
+    await ensureOwnedActiveBranch(ownerId, branchId);
+    const waiterId = parseRequiredString(waiterIdRaw, "Waiter ID");
+
+    const openShift = await prisma.waiterShift.findFirst({
+      where: { branchId, waiterId, status: "OPEN" }
+    });
+
+    if (!openShift) {
+      throw new WaitersError(404, "Ochiq smena topilmadi");
+    }
+
+    const endingCash = isObject(payload) && typeof payload.endingCash === 'number' ? payload.endingCash : Number(openShift.startingCash);
+    const closingNote = isObject(payload) && typeof payload.closingNote === 'string' ? payload.closingNote : null;
+
+    const shift = await prisma.waiterShift.update({
+      where: { id: openShift.id },
+      data: {
+        status: "CLOSED",
+        closedAt: new Date(),
+        closedById: managerId,
+        endingCash,
+        closingNote
+      },
+      include: {
+        openedBy: { select: { fullName: true } },
+        closedBy: { select: { fullName: true } }
+      }
+    });
+
+    return {
+      ...shift,
+      startingCash: Number(shift.startingCash),
+      endingCash: Number(shift.endingCash)
+    };
   }
 };

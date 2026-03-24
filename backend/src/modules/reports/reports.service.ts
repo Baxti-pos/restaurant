@@ -476,5 +476,73 @@ export const reportsService = {
       range,
       data
     };
+  },
+
+  async productPerformance(ownerId: string, branchId: string, query?: Record<string, unknown>) {
+    const branch = await ensureOwnedActiveBranch(ownerId, branchId);
+    const range = parseDateRange(query, "month");
+
+    const items = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          branchId,
+          status: "CLOSED",
+          closedAt: {
+            gte: range.from,
+            lte: range.to
+          }
+        }
+      },
+      select: {
+        productId: true,
+        productName: true,
+        quantity: true,
+        lineTotal: true,
+        unitPrice: true
+      }
+    });
+
+    const productMap = new Map<
+      string,
+      {
+        productId: string | null;
+        productName: string;
+        totalQty: number;
+        totalRevenue: number;
+        avgPrice: number;
+        ordersCount: number;
+      }
+    >();
+
+    for (const item of items) {
+      const key = item.productId ?? `__name__${item.productName}`;
+      const existing = productMap.get(key) ?? {
+        productId: item.productId,
+        productName: item.productName,
+        totalQty: 0,
+        totalRevenue: 0,
+        avgPrice: Number(item.unitPrice),
+        ordersCount: 0
+      };
+      existing.totalQty += item.quantity;
+      existing.totalRevenue += Number(item.lineTotal);
+      existing.ordersCount += 1;
+      productMap.set(key, existing);
+    }
+
+    const data = Array.from(productMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .map(row => ({
+        ...row,
+        totalRevenue: Number(row.totalRevenue.toFixed(2))
+      }));
+
+    const summary = {
+      totalProducts: data.length,
+      totalQty: data.reduce((s, r) => s + r.totalQty, 0),
+      totalRevenue: Number(data.reduce((s, r) => s + r.totalRevenue, 0).toFixed(2))
+    };
+
+    return { branch, range, summary, data };
   }
 };

@@ -24,46 +24,27 @@ import {
 import { api } from "../../lib/api";
 import { getAuth } from "../../lib/auth";
 import { hasPermission } from "../../lib/permissions";
-import { Expense, ExpenseType } from "../../lib/types";
+import { Expense, ExpenseCategory } from "../../lib/types";
 import {
   formatCurrency,
   formatDateShort,
   todayStr,
 } from "../../lib/formatters";
-import { clsx } from "clsx";
+
 interface ExpensesPageProps {
   activeBranchId: string;
   activeBranchName: string;
 }
-const expenseTypes = [
-  {
-    value: "salary",
-    label: "Oylik",
-  },
-  {
-    value: "market",
-    label: "Bozorlik",
-  },
-  {
-    value: "other",
-    label: "Boshqa",
-  },
-];
 
-const expenseTypeLabels: Record<string, string> = {
-  salary: "Ish haqi",
-  market: "Bozor xarajati",
-  other: "Boshqa xarajat",
-};
-const typeBadge = (t: ExpenseType) => {
-  if (t === "salary")
+const typeBadge = (categoryName?: string) => {
+  if (categoryName === "Ish haqi")
     return (
       <Badge variant="info" size="sm">
-        Oylik
+        Ish haqi
       </Badge>
     );
 
-  if (t === "market")
+  if (categoryName === "Bozor xarajati")
     return (
       <Badge variant="success" size="sm">
         Bozorlik
@@ -72,7 +53,7 @@ const typeBadge = (t: ExpenseType) => {
 
   return (
     <Badge variant="warning" size="sm">
-      Boshqa
+      {categoryName || "Boshqa"}
     </Badge>
   );
 };
@@ -84,9 +65,10 @@ export function ExpensesPage({
   const canManageExpenses = hasPermission(authUser, "EXPENSES_MANAGE");
   const [date, setDate] = useState(todayStr());
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
-    type: "market" as ExpenseType,
+    categoryId: "" as string,
     name: "",
     amount: "",
     note: "",
@@ -99,26 +81,39 @@ export function ExpensesPage({
   const [deleting, setDeleting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const load = () => {
+
+  const load = async () => {
     setLoading(true);
-    api.expenses.listByBranchAndDate(activeBranchId, date).then((d) => {
-      setExpenses(d);
+    try {
+      const [exps, cats] = await Promise.all([
+        api.expenses.listByBranchAndDate(activeBranchId, date),
+        api.expenseCategories.listByBranch(activeBranchId),
+      ]);
+      setExpenses(exps);
+      setCategories(cats);
+      
+      // Select first category by default if form category is empty
+      if (!form.categoryId && cats.length > 0) {
+        setForm(f => ({ ...f, categoryId: cats[0].id }));
+      }
+    } catch {
+      toast.error();
+    } finally {
       setLoading(false);
-    });
+    }
   };
+
   useEffect(() => {
     load();
   }, [activeBranchId, date]);
   const total = expenses.reduce((s, e) => s + e.amount, 0);
   const salary = expenses
-    .filter((e) => e.type === "salary")
+    .filter((e) => e.category?.name === "Ish haqi")
     .reduce((s, e) => s + e.amount, 0);
   const market = expenses
-    .filter((e) => e.type === "market")
+    .filter((e) => e.category?.name === "Bozor xarajati")
     .reduce((s, e) => s + e.amount, 0);
-  const other = expenses
-    .filter((e) => e.type === "other")
-    .reduce((s, e) => s + e.amount, 0);
+  const other = total - salary - market;
   const validateForm = (f: typeof form) => {
     const e: Record<string, string> = {};
     if (!f.name.trim()) e.name = "Bu maydon to'ldirilishi shart";
@@ -126,46 +121,12 @@ export function ExpensesPage({
       e.amount = "Summa 0 dan katta bo'lishi kerak";
     return e;
   };
-  const handleCreate = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    if (!canManageExpenses) return;
-    const e = validateForm(form);
-    if (Object.keys(e).length > 0) {
-      setFormErrors(e);
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.expenses.create({
-        branchId: activeBranchId,
-        type: form.type,
-        name: form.name,
-        amount: Number(form.amount),
-        note: form.note,
-        date: form.date,
-      });
-      toast.success("Xarajat saqlandi");
-      setForm({
-        type: "market",
-        name: "",
-        amount: "",
-        note: "",
-        date: todayStr(),
-      });
-      setFormErrors({});
-      load();
-    } catch {
-      toast.error();
-    } finally {
-      setSaving(false);
-    }
-  };
   const openEdit = (exp: Expense) => {
     if (!canManageExpenses) return;
     setEditing(true);
     setEditingExpenseId(exp.id);
     setForm({
-      type: exp.type,
+      categoryId: exp.categoryId || "",
       name: exp.name,
       amount: String(exp.amount),
       note: exp.note || "",
@@ -204,7 +165,7 @@ export function ExpensesPage({
       setSaving(true);
       try {
         await api.expenses.update(editingExpenseId, {
-          type: form.type,
+          categoryId: form.categoryId || null,
           name: form.name,
           amount: Number(form.amount),
           note: form.note,
@@ -225,7 +186,7 @@ export function ExpensesPage({
       try {
         await api.expenses.create({
           branchId: activeBranchId,
-          type: form.type,
+          categoryId: form.categoryId || null,
           name: form.name,
           amount: Number(form.amount),
           note: form.note,
@@ -233,7 +194,7 @@ export function ExpensesPage({
         });
         toast.success("Xarajat saqlandi");
         setForm({
-          type: "market",
+          categoryId: categories[0]?.id || "",
           name: "",
           amount: "",
           note: "",
@@ -255,7 +216,7 @@ export function ExpensesPage({
     setEditing(false);
     setEditingExpenseId(null);
     setForm({
-      type: "market",
+      categoryId: categories[0]?.id || "",
       name: "",
       amount: "",
       note: "",
@@ -266,8 +227,8 @@ export function ExpensesPage({
   };
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="hidden lg:block">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
           <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Xarajatlar
           </h1>
@@ -278,12 +239,27 @@ export function ExpensesPage({
             </span>
           </p>
         </div>
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-auto"
-        />
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 md:flex-none">
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full md:w-44"
+            />
+          </div>
+          {canManageExpenses && (
+            <Button
+              onClick={openCreateModal}
+              className="hidden md:inline-flex whitespace-nowrap"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">Xarajat qo'shish</span>
+              <span className="sm:hidden">Qo'shish</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -321,91 +297,11 @@ export function ExpensesPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
-        {/* Create form (Desktop only) */}
-        {canManageExpenses && (
-          <div className="hidden lg:block bg-white rounded-xl border border-slate-200 p-5 lg:sticky lg:top-20 max-h-[calc(100vh-120px)] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">
-              Xarajat qo'shish
-            </h3>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <Select
-                label="Turi"
-                value={form.type}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    type: e.target.value as ExpenseType,
-                  })
-                }
-                options={expenseTypes}
-                required
-              />
-              <Input
-                label="Nomi"
-                placeholder="Xarajat nomi"
-                value={form.name}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    name: e.target.value,
-                  })
-                }
-                required
-              />
-
-              <Input
-                label="Summa (so'm)"
-                type="number"
-                placeholder="0"
-                value={form.amount || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    amount: Number(e.target.value),
-                  })
-                }
-                required
-              />
-
-              <Input
-                label="Izoh (ixtiyoriy)"
-                placeholder="Qo'shimcha ma'lumot"
-                value={form.note}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    note: e.target.value,
-                  })
-                }
-              />
-
-              <Input
-                label="Sana"
-                type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    date: e.target.value,
-                  })
-                }
-                required
-              />
-
-              <div className="flex space-x-3 pt-2">
-                <Button type="submit" className="flex-1" isLoading={saving}>
-                  Saqlash
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
-
+      <div className="space-y-6">
         {/* Expenses list */}
-        <div className="lg:col-span-2 lg:max-h-[calc(100vh-180px)] lg:overflow-y-auto lg:pr-1">
+        <div className="w-full">
           <h3 className="text-sm font-semibold text-slate-900 mb-3 hidden lg:block">
-            {formatDateShort(date)} sanasidagi xarajat
+            {formatDateShort(date)} sanasidagi xarajatlar
           </h3>
           {loading ? (
             <TableSkeleton rows={4} />
@@ -424,7 +320,7 @@ export function ExpensesPage({
                     className="bg-white rounded-xl border border-slate-200 px-4 py-3"
                   >
                     <div className="flex justify-between items-center mb-2">
-                      {typeBadge(exp.type)}
+                      {typeBadge(exp.category?.name)}
                       <span className="font-bold text-red-600 whitespace-nowrap">
                         {formatCurrency(exp.amount)}
                       </span>
@@ -488,7 +384,7 @@ export function ExpensesPage({
                         key={exp.id}
                         className="hover:bg-slate-50 transition-colors"
                       >
-                        <td className="px-4 py-3">{typeBadge(exp.type)}</td>
+                        <td className="px-4 py-3">{typeBadge(exp.category?.name)}</td>
                         <td className="px-4 py-3">
                           <p className="font-medium text-slate-800">
                             {exp.name}
@@ -554,14 +450,14 @@ export function ExpensesPage({
         <form onSubmit={handleSave} className="space-y-4">
           <Select
             label="Turi"
-            value={form.type}
+            value={form.categoryId}
             onChange={(e) =>
               setForm({
                 ...form,
-                type: e.target.value as ExpenseType,
+                categoryId: e.target.value,
               })
             }
-            options={expenseTypes}
+            options={categories.map(c => ({ value: c.id, label: c.name }))}
             required
           />
           <Input
@@ -574,6 +470,7 @@ export function ExpensesPage({
                 name: e.target.value,
               })
             }
+            error={formErrors.name}
             required
           />
 
@@ -581,13 +478,14 @@ export function ExpensesPage({
             label="Summa (so'm)"
             type="number"
             placeholder="0"
-            value={form.amount || ""}
+            value={form.amount}
             onChange={(e) =>
               setForm({
                 ...form,
-                amount: Number(e.target.value),
+                amount: e.target.value,
               })
             }
+            error={formErrors.amount}
             required
           />
 
@@ -613,6 +511,7 @@ export function ExpensesPage({
                 date: e.target.value,
               })
             }
+            calendarPosition="up"
             required
           />
 

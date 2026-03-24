@@ -1,14 +1,15 @@
 import type { Request, Response } from "express";
-import { ReportsError, reportsService } from "./reports.service.js";
+import { expenseCategoriesService } from "./expense-categories.service.js";
+import { ExpensesError } from "./expenses.service.js";
 
 const handleError = (res: Response, error: unknown) => {
-  if (error instanceof ReportsError) {
+  if (error instanceof ExpensesError) {
     return res.status(error.statusCode).json({
       message: error.message
     });
   }
 
-  console.error("Reports controller xatosi:", error);
+  console.error("Expense categories controller xatosi:", error);
   return res.status(500).json({
     message: "Ichki server xatosi"
   });
@@ -25,22 +26,17 @@ const getContext = (req: Request) => {
   return { ownerId, branchId };
 };
 
-export const reportsController = {
-  async salesSummary(req: Request, res: Response) {
+export const expenseCategoriesController = {
+  async list(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
       if (!ctx) {
         return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
       }
 
-      const data = await reportsService.salesSummary(
-        ctx.ownerId,
-        ctx.branchId,
-        req.query as Record<string, unknown>
-      );
-
+      const data = await expenseCategoriesService.list(ctx.ownerId, ctx.branchId);
       return res.status(200).json({
-        message: "Sotuvlar xulosasi",
+        message: "Xarajat turlari ro'yxati",
         data
       });
     } catch (error) {
@@ -48,21 +44,17 @@ export const reportsController = {
     }
   },
 
-  async dashboard(req: Request, res: Response) {
+  async create(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
       if (!ctx) {
         return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
       }
 
-      const data = await reportsService.dashboard(
-        ctx.ownerId,
-        ctx.branchId,
-        req.query as Record<string, unknown>
-      );
-
-      return res.status(200).json({
-        message: "Dashboard statistikasi",
+      const { name } = req.body;
+      const data = await expenseCategoriesService.create(ctx.ownerId, ctx.branchId, name);
+      return res.status(201).json({
+        message: "Xarajat turi yaratildi",
         data
       });
     } catch (error) {
@@ -70,21 +62,18 @@ export const reportsController = {
     }
   },
 
-  async waiterActivity(req: Request, res: Response) {
+  async update(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
       if (!ctx) {
         return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
       }
 
-      const data = await reportsService.waiterActivity(
-        ctx.ownerId,
-        ctx.branchId,
-        req.query as Record<string, unknown>
-      );
-
+      const { name } = req.body;
+      const { categoryId } = req.params;
+      const data = await expenseCategoriesService.update(ctx.ownerId, ctx.branchId, categoryId, name);
       return res.status(200).json({
-        message: "Waiter faolligi hisoboti",
+        message: "Xarajat turi yangilandi",
         data
       });
     } catch (error) {
@@ -92,21 +81,17 @@ export const reportsController = {
     }
   },
 
-  async productPerformance(req: Request, res: Response) {
+  async remove(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
       if (!ctx) {
         return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
       }
 
-      const data = await reportsService.productPerformance(
-        ctx.ownerId,
-        ctx.branchId,
-        req.query as Record<string, unknown>
-      );
-
+      const { categoryId } = req.params;
+      const data = await expenseCategoriesService.remove(ctx.ownerId, ctx.branchId, categoryId);
       return res.status(200).json({
-        message: "Mahsulot samaradorligi hisoboti",
+        message: "Xarajat turi o'chirildi",
         data
       });
     } catch (error) {

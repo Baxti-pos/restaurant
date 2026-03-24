@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
-import { authMiddleware } from "../../middlewares/auth.js";
+import { authMiddleware, shiftMiddleware, requireShift } from "../../middlewares/auth.js";
 import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
 import {
   requireManagerAnyPermissions,
@@ -12,7 +12,7 @@ import { ordersController } from "./orders.controller.js";
 
 export const ordersRouter = Router();
 
-ordersRouter.use(authMiddleware, activeBranchMiddleware, branchScopeMiddleware);
+ordersRouter.use(authMiddleware, activeBranchMiddleware, branchScopeMiddleware, shiftMiddleware);
 
 ordersRouter.get(
   "/",
@@ -40,6 +40,7 @@ ordersRouter.post(
   "/open-for-table",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
   (req, res) =>
   ordersController.openForTable(req, res)
 );
@@ -47,6 +48,7 @@ ordersRouter.post(
   "/:orderId/items",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
   (req, res) =>
   ordersController.addItem(req, res)
 );

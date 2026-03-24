@@ -31,14 +31,12 @@ export function ProductsPage({
   const [loading, setLoading] = useState(true);
   const [selectedCat, setSelectedCat] = useState<string>(ALL_CATEGORY_ID);
   const [search, setSearch] = useState('');
-  const [catModal, setCatModal] = useState(false);
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [catName, setCatName] = useState('');
   const [catNameError, setCatNameError] = useState('');
   const [savingCat, setSavingCat] = useState(false);
   const [deleteCat, setDeleteCat] = useState<Category | null>(null);
   const [deletingCat, setDeletingCat] = useState(false);
-  const [prodModal, setProdModal] = useState(false);
   const [editingProd, setEditingProd] = useState<Product | null>(null);
   const [prodForm, setProdForm] = useState({
     name: '',
@@ -49,11 +47,17 @@ export function ProductsPage({
   const [prodErrors, setProdErrors] = useState<Record<string, string>>({});
   const [savingProd, setSavingProd] = useState(false);
   const [togglingProdId, setTogglingProdId] = useState<string | null>(null);
-  const [categoryModal, setCategoryModal] = useState({
+  const [categoryModal, setCategoryModal] = useState<{
+    open: boolean;
+    editing: Category | null;
+  }>({
     open: false,
     editing: null
   });
-  const [productModal, setProductModal] = useState({
+  const [productModal, setProductModal] = useState<{
+    open: boolean;
+    editing: Product | null;
+  }>({
     open: false,
     editing: null
   });
@@ -434,28 +438,14 @@ export function ProductsPage({
           {/* Products Panel */}
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                placeholder="Mahsulot qidirish..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-10 pl-9 pr-4 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-
+              <div className="flex-1">
+                <Input
+                  placeholder="Mahsulot qidirish..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  icon={<Search className="h-4 w-4" />}
+                />
               </div>
-              {/* Mobile: Icon only button */}
-              {canManageProducts &&
-              <div className="md:hidden">
-                <Button
-                variant="primary"
-                size="icon"
-                onClick={openCreateProd}
-                aria-label="Mahsulot qo'shish">
-
-                  <Plus className="h-5 w-5" />
-                </Button>
-              </div>
-              }
               {/* Desktop: Full button */}
               {canManageProducts &&
               <div className="hidden md:block">

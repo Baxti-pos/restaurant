@@ -6,11 +6,11 @@ import { Modal } from "../../components/ui/Modal";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { TableSkeleton } from "../../components/ui/LoadingSkeleton";
 import { toast } from "../../components/ui/Toast";
-import { Plus, Edit2, Trash2, Users, User, Phone, Lock } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, User, Phone, Lock, Clock, History, Ban, CheckCircle2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { getAuth } from "../../lib/auth";
 import { hasPermission } from "../../lib/permissions";
-import { Waiter } from "../../lib/types";
+import { Waiter, WaiterShift } from "../../lib/types";
 interface WaitersPageProps {
   activeBranchId: string;
   activeBranchName: string;
@@ -54,6 +54,13 @@ export function WaitersPage({
     salesSharePercent: "8",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Shift Management State
+  const [shiftsModalOpen, setShiftsModalOpen] = useState(false);
+  const [selectedWaiter, setSelectedWaiter] = useState<Waiter | null>(null);
+  const [shifts, setShifts] = useState<WaiterShift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [shiftActionLoading, setShiftActionLoading] = useState(false);
   const load = () => {
     setLoading(true);
     api.waiters
@@ -122,19 +129,26 @@ export function WaitersPage({
     ev.preventDefault();
     if (!canManageWaiters) return;
     if (!validate()) return;
-    const payload = {
-      name: form.name,
-      phone: normalizePhoneInput(form.phone),
-      ...(form.password.trim() ? { password: form.password.trim() } : {}),
-      isEnabled: form.isEnabled,
-      salesSharePercent: Number(form.salesSharePercent),
-    };
     setSaving(true);
     try {
       if (editing) {
+        const payload = {
+          name: form.name,
+          phone: normalizePhoneInput(form.phone),
+          ...(form.password.trim() ? { password: form.password.trim() } : {}),
+          isEnabled: form.isEnabled,
+          salesSharePercent: Number(form.salesSharePercent),
+        };
         await api.waiters.update(editing.id, payload);
         toast.success("Girgitton yangilandi");
       } else {
+        const payload = {
+          name: form.name,
+          phone: normalizePhoneInput(form.phone),
+          password: form.password.trim(),
+          isEnabled: form.isEnabled,
+          salesSharePercent: Number(form.salesSharePercent),
+        };
         await api.waiters.create(payload);
         toast.success("Girgitton qo'shildi");
       }
@@ -161,6 +175,53 @@ export function WaitersPage({
       setDeleting(false);
     }
   };
+
+  const openShiftsModal = async (w: Waiter) => {
+    setSelectedWaiter(w);
+    setShiftsModalOpen(true);
+    setShiftsLoading(true);
+    try {
+      const data = await api.waiters.getShifts(w.id);
+      setShifts(data);
+    } catch (error: unknown) {
+      toast.error("Smenalarni yuklashda xatolik");
+    } finally {
+      setShiftsLoading(false);
+    }
+  };
+
+  const handleOpenShift = async () => {
+    if (!selectedWaiter) return;
+    setShiftActionLoading(true);
+    try {
+      await api.waiters.openShift(selectedWaiter.id, { startingCash: 0 });
+      toast.success("Smena ochildi");
+      const data = await api.waiters.getShifts(selectedWaiter.id);
+      setShifts(data);
+      load(); // Reload waiters to update badges
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setShiftActionLoading(true);
+      setShiftActionLoading(false);
+    }
+  };
+
+  const handleCloseShift = async () => {
+    if (!selectedWaiter) return;
+    setShiftActionLoading(true);
+    try {
+      await api.waiters.closeShift(selectedWaiter.id, { endingCash: 0 });
+      toast.success("Smena yopildi");
+      const data = await api.waiters.getShifts(selectedWaiter.id);
+      setShifts(data);
+      load(); // Reload waiters to update badges
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setShiftActionLoading(false);
+    }
+  };
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-end lg:justify-between">
@@ -175,14 +236,6 @@ export function WaitersPage({
             </span>
           </p>
         </div>
-        {/* Mobile: Icon Button */}
-        {canManageWaiters && (
-          <div className="md:hidden">
-            <Button size="icon" onClick={openCreate}>
-              <Plus className="h-5 w-5" />
-            </Button>
-          </div>
-        )}
         {/* Desktop: Full Button */}
         {canManageWaiters && (
           <div className="hidden md:block">
@@ -258,14 +311,23 @@ export function WaitersPage({
                 {canManageWaiters && (
                   <div className="flex flex-col gap-1">
                     <button
+                      onClick={() => openShiftsModal(w)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-lg"
+                      title="Smenalar"
+                    >
+                      <Clock className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={() => openEdit(w)}
                       className="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 rounded-lg"
+                      title="Tahrirlash"
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(w)}
                       className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg"
+                      title="O'chirish"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -338,14 +400,23 @@ export function WaitersPage({
                       {canManageWaiters && (
                         <td className="px-5 py-4 text-right space-x-1">
                           <button
+                            onClick={() => openShiftsModal(w)}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Smenalar"
+                          >
+                            <Clock className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => openEdit(w)}
                             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Tahrirlash"
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(w)}
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="O'chirish"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -460,6 +531,86 @@ export function WaitersPage({
         message={`"${deleteTarget?.name}" ni o'chirishni tasdiqlaysizmi?`}
         isLoading={deleting}
       />
+
+      <Modal
+        isOpen={shiftsModalOpen}
+        onClose={() => setShiftsModalOpen(false)}
+        title={`${selectedWaiter?.name} - Smenalar`}
+        size="md"
+      >
+        <div className="space-y-6">
+          {canManageWaiters && (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Smenani boshqarish</p>
+                <p className="text-xs text-slate-500">Hozirgi holat: {selectedWaiter?.shiftStatus === 'active' ? 'Ochiq' : 'Yopiq'}</p>
+              </div>
+              {selectedWaiter?.shiftStatus === 'active' ? (
+                <Button variant="danger" onClick={handleCloseShift} isLoading={shiftActionLoading}>
+                  <Ban className="h-4 w-4 mr-1.5" />
+                  Smenani yopish
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={handleOpenShift} isLoading={shiftActionLoading}>
+                  <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                  Smena ochish
+                </Button>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <History className="h-4 w-4 text-slate-400" />
+              Oxirgi smenalar
+            </h3>
+
+            {shiftsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-16 bg-slate-50 animate-pulse rounded-lg" />
+                ))}
+              </div>
+            ) : shifts.length === 0 ? (
+              <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-400">Smenalar tarixi topilmadi</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {shifts.map(s => (
+                  <div key={s.id} className="p-3 bg-white border border-slate-100 rounded-xl flex items-center justify-between hover:border-slate-200 transition-colors shadow-sm">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-slate-900">
+                          {new Date(s.openedAt).toLocaleDateString()}
+                        </span>
+                        {s.status === 'OPEN' ? (
+                          <Badge variant="success">Ochiq</Badge>
+                        ) : (
+                          <Badge variant="secondary">Yopilgan</Badge>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(s.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {s.closedAt && ` - ${new Date(s.closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-slate-900">
+                        {s.status === 'OPEN' ? s.startingCash.toLocaleString() : s.endingCash?.toLocaleString()} so'm
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {s.status === 'OPEN' ? `Ochdi: ${s.openedBy?.fullName}` : `Yopdi: ${s.closedBy?.fullName}`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

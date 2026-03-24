@@ -5,6 +5,7 @@ import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
 import { requireAnyPermissions, requirePermissions } from "../../middlewares/permissions.js";
 import { requireRoles } from "../../middlewares/roles.js";
 import { expensesController } from "./expenses.controller.js";
+import { expenseCategoriesController } from "./expense-categories.controller.js";
 
 export const expensesRouter = Router();
 
@@ -13,6 +14,20 @@ expensesRouter.use(
   requireRoles(["OWNER", "MANAGER"]),
   activeBranchMiddleware,
   branchScopeMiddleware
+);
+
+// Expense categories
+expensesRouter.get("/categories", requirePermissions(["EXPENSES_VIEW"]), (req, res) =>
+  expenseCategoriesController.list(req, res)
+);
+expensesRouter.post("/categories", requirePermissions(["EXPENSES_MANAGE"]), (req, res) =>
+  expenseCategoriesController.create(req, res)
+);
+expensesRouter.patch("/categories/:categoryId", requirePermissions(["EXPENSES_MANAGE"]), (req, res) =>
+  expenseCategoriesController.update(req, res)
+);
+expensesRouter.delete("/categories/:categoryId", requirePermissions(["EXPENSES_MANAGE"]), (req, res) =>
+  expenseCategoriesController.remove(req, res)
 );
 
 expensesRouter.get(

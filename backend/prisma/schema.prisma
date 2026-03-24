@@ -57,6 +57,7 @@ model User {
   waiterShifts   WaiterShift[] @relation("ShiftWaiter")
   openedShifts   WaiterShift[] @relation("ShiftOpenedBy")
   closedShifts   WaiterShift[] @relation("ShiftClosedBy")
+  payouts        CommissionPayout[] @relation("CommissionWaiter")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -81,6 +82,8 @@ model Branch {
   orders       Order[]
   expenses     Expense[]
   waiterShifts WaiterShift[]
+  payouts      CommissionPayout[]
+  expenseCategories ExpenseCategory[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -208,6 +211,7 @@ model Expense {
   id          String    @id @default(cuid())
   branchId     String
   createdById  String?
+  categoryId   String?
   title        String
   amount       Decimal   @db.Decimal(12, 2)
   description  String?
@@ -216,9 +220,24 @@ model Expense {
   updatedAt    DateTime  @updatedAt
   branch       Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   createdBy    User?     @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  category     ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([branchId, spentAt])
   @@index([createdById])
+  @@index([categoryId])
+}
+
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  branchId  String
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name      String
+  expenses  Expense[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([branchId, name])
+  @@index([branchId])
 }
 
 model WaiterShift {
@@ -246,4 +265,20 @@ model WaiterShift {
   @@index([branchId, status, openedAt])
   @@index([waiterId, status])
   @@index([openedAt])
+}
+
+model CommissionPayout {
+  id          String   @id @default(cuid())
+  branchId    String
+  waiterId    String
+  amount      Decimal  @db.Decimal(12, 2)
+  note        String?
+  paidAt      DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  waiter      User     @relation("CommissionWaiter", fields: [waiterId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, paidAt])
+  @@index([waiterId])
 }

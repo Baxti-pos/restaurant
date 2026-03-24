@@ -10,13 +10,15 @@ import {
   Order,
   OrderItem,
   Expense,
+  ExpenseCategory,
   User,
   OwnerProfile,
   Manager,
   DashboardStats,
   WaiterActivity,
   PaymentType,
-  ExpenseType } from
+  WaiterShift,
+  WaiterCommissionSummary } from
 './types';
 
 type BackendRole = 'OWNER' | 'MANAGER' | 'WAITER';
@@ -133,7 +135,9 @@ interface BackendOrderItem {
   productName: string;
   unitPrice: string | number;
   quantity: number;
+  note?: string | null;
 }
+
 
 interface BackendOrder {
   id: string;
@@ -159,11 +163,22 @@ interface BackendOrder {
 interface BackendExpense {
   id: string;
   branchId: string;
+  categoryId: string | null;
+  category?: {
+    id: string;
+    name: string;
+  };
   title: string;
   amount: string | number;
   description: string | null;
   spentAt: string;
   createdAt: string;
+}
+
+interface BackendExpenseCategory {
+  id: string;
+  branchId: string;
+  name: string;
 }
 
 interface BackendDashboardPayload {
@@ -240,6 +255,26 @@ interface BackendMeEarningsPayload {
   };
 }
 
+interface BackendWaiterCommissionPayout {
+  id: string;
+  waiterId: string;
+  branchId: string;
+  amount: string | number;
+  note: string | null;
+  paidAt: string;
+  createdAt: string;
+}
+
+interface BackendWaiterCommissionSummary {
+  waiterId: string;
+  fullName: string;
+  salesSharePercent: number;
+  totalEarned: number;
+  totalPaid: number;
+  balance: number;
+  payouts: BackendWaiterCommissionPayout[];
+}
+
 interface WaiterCreateInput {
   name: string;
   phone: string;
@@ -261,7 +296,6 @@ const API_BASE_URL =
     ?.VITE_API_BASE_URL ?? '/api';
 const DEFAULT_SHIFT_START = '08:00';
 const DEFAULT_SHIFT_END = '22:00';
-const EXPENSE_META_PREFIX = '__baxti_expense_meta__:';
 
 const toNumber = (value: unknown, fallback = 0) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -342,6 +376,12 @@ const request = async <T>(
   }
 
   if (!response.ok) {
+    // Auto-clear auth on 401 to force re-login
+    if (response.status === 401 && !options.skipAuth) {
+      const { clearAuth } = await import('./auth');
+      clearAuth();
+      window.location.reload();
+    }
     const message =
     extractErrorMessage(payload) ??
     `So'rov bajarilmadi (${response.status})`;
@@ -416,8 +456,16 @@ const mapWaiter = (waiter: BackendWaiter): Waiter => ({
   phone: waiter.phone ?? '',
   isEnabled: waiter.isActive,
   salesSharePercent: toNumber(waiter.salesSharePercent, 8),
-  shiftStatus: waiter.isActive ? 'not_started' : 'ended',
+  shiftStatus: (waiter as any).shiftStatus || (waiter.isActive ? 'not_started' : 'ended'),
   createdAt: waiter.createdAt
+});
+
+const mapWaiterCommissionSummary = (data: BackendWaiterCommissionSummary): WaiterCommissionSummary => ({
+  ...data,
+  payouts: data.payouts.map((p) => ({
+    ...p,
+    amount: toNumber(p.amount)
+  }))
 });
 
 const mapTableStatus = (status: BackendTableStatus): TableItem['status'] => {
@@ -509,7 +557,8 @@ const mapOrderItem = (item: BackendOrderItem): OrderItem => ({
   productId: item.productId ?? '',
   productName: item.productName,
   quantity: item.quantity,
-  price: toNumber(item.unitPrice)
+  price: toNumber(item.unitPrice),
+  note: (item as BackendOrderItem & { note?: string }).note ?? undefined
 });
 
 const mapOrder = (order: BackendOrder): Order => ({
@@ -527,67 +576,25 @@ const mapOrder = (order: BackendOrder): Order => ({
   closedAt: order.closedAt ?? undefined
 });
 
-const normalizeExpenseType = (value: unknown): ExpenseType => {
-  if (value === 'salary' || value === 'market' || value === 'other') {
-    return value;
-  }
-
-  return 'other';
-};
-
-const encodeExpenseDescription = (type: ExpenseType, note?: string) => {
-  const payload = {
-    type,
-    note: note?.trim() ?? ''
-  };
-
-  return `${EXPENSE_META_PREFIX}${JSON.stringify(payload)}`;
-};
-
-const decodeExpenseDescription = (description: string | null) => {
-  if (!description) {
-    return {
-      type: 'other' as ExpenseType,
-      note: ''
-    };
-  }
-
-  if (!description.startsWith(EXPENSE_META_PREFIX)) {
-    return {
-      type: 'other' as ExpenseType,
-      note: description
-    };
-  }
-
-  const encoded = description.slice(EXPENSE_META_PREFIX.length);
-  try {
-    const parsed = JSON.parse(encoded) as { type?: unknown; note?: unknown };
-    return {
-      type: normalizeExpenseType(parsed.type),
-      note: typeof parsed.note === 'string' ? parsed.note : ''
-    };
-  } catch {
-    return {
-      type: 'other' as ExpenseType,
-      note: ''
-    };
-  }
-};
-
 const mapExpense = (expense: BackendExpense): Expense => {
-  const meta = decodeExpenseDescription(expense.description);
-
   return {
     id: expense.id,
     branchId: expense.branchId,
-    type: meta.type,
+    categoryId: expense.categoryId,
+    category: expense.category,
     name: expense.title,
     amount: toNumber(expense.amount),
-    note: meta.note || undefined,
+    note: expense.description || undefined,
     date: toDateOnly(expense.spentAt),
     createdAt: expense.createdAt
   };
 };
+
+const mapExpenseCategory = (cat: BackendExpenseCategory): ExpenseCategory => ({
+  id: cat.id,
+  branchId: cat.branchId,
+  name: cat.name
+});
 
 const shiftDate = (offset: number) => {
   const date = new Date();
@@ -769,6 +776,39 @@ export const api = {
       await request<BackendWaiter>(`/waiters/${id}`, {
         method: 'DELETE'
       });
+    },
+
+    getCommissionSummary: async (waiterId: string): Promise<WaiterCommissionSummary> => {
+      const data = await request<BackendWaiterCommissionSummary>(`/waiters/${waiterId}/commission-summary`);
+      return mapWaiterCommissionSummary(data);
+    },
+
+    addCommissionPayout: async (waiterId: string, data: { amount: number; note?: string }): Promise<void> => {
+      await request<void>(`/waiters/${waiterId}/payouts`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    },
+
+    getShifts: async (waiterId: string): Promise<WaiterShift[]> => {
+      const rows = await request<WaiterShift[]>(`/waiters/${waiterId}/shifts`);
+      return rows;
+    },
+
+    openShift: async (waiterId: string, payload: { startingCash: number; openingNote?: string }): Promise<WaiterShift> => {
+      const created = await request<WaiterShift>(`/waiters/${waiterId}/shifts/open`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return created;
+    },
+
+    closeShift: async (waiterId: string, payload: { endingCash: number; closingNote?: string }): Promise<WaiterShift> => {
+      const updated = await request<WaiterShift>(`/waiters/${waiterId}/shifts/close`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return updated;
     }
   },
 
@@ -975,15 +1015,16 @@ export const api = {
     },
 
     create: async (
-    data: Omit<Expense, 'id' | 'createdAt'>)
+    data: Omit<Expense, 'id' | 'createdAt' | 'category'>)
     : Promise<Expense> => {
       const created = await request<BackendExpense>('/expenses', {
         method: 'POST',
         body: JSON.stringify({
           title: data.name,
           amount: data.amount,
-          description: encodeExpenseDescription(data.type, data.note),
-          spentAt: data.date
+          description: data.note,
+          spentAt: data.date,
+          categoryId: data.categoryId
         })
       });
 
@@ -996,12 +1037,8 @@ export const api = {
       if (data.name !== undefined) payload.title = data.name;
       if (data.amount !== undefined) payload.amount = data.amount;
       if (data.date !== undefined) payload.spentAt = data.date;
-      if (data.type !== undefined || data.note !== undefined) {
-        payload.description = encodeExpenseDescription(
-          data.type ?? 'other',
-          data.note
-        );
-      }
+      if (data.note !== undefined) payload.description = data.note;
+      if (data.categoryId !== undefined) payload.categoryId = data.categoryId;
 
       const updated = await request<BackendExpense>(`/expenses/${id}`, {
         method: 'PATCH',
@@ -1013,6 +1050,37 @@ export const api = {
 
     delete: async (id: string): Promise<void> => {
       await request<BackendExpense>(`/expenses/${id}`, {
+        method: 'DELETE'
+      });
+    }
+  },
+
+  expenseCategories: {
+    listByBranch: async (_branchId: string): Promise<ExpenseCategory[]> => {
+      const rows = await request<BackendExpenseCategory[]>('/expenses/categories');
+      return rows.map(mapExpenseCategory);
+    },
+
+    create: async (data: { name: string }): Promise<ExpenseCategory> => {
+      const created = await request<BackendExpenseCategory>('/expenses/categories', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+
+      return mapExpenseCategory(created);
+    },
+
+    update: async (id: string, data: { name: string }): Promise<ExpenseCategory> => {
+      const updated = await request<BackendExpenseCategory>(`/expenses/categories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+      });
+
+      return mapExpenseCategory(updated);
+    },
+
+    delete: async (id: string): Promise<void> => {
+      await request<void>(`/expenses/categories/${id}`, {
         method: 'DELETE'
       });
     }
@@ -1195,16 +1263,14 @@ export const api = {
       );
 
       const expenseByDay = new Map<string, number>();
-      const expensesByTypeTotals: Record<ExpenseType, number> = {
-        salary: 0,
-        market: 0,
-        other: 0
-      };
+      const expensesByCategory: Record<string, number> = {};
 
       for (const rawExpense of expenses) {
         const expense = mapExpense(rawExpense);
         expenseByDay.set(expense.date, (expenseByDay.get(expense.date) ?? 0) + expense.amount);
-        expensesByTypeTotals[expense.type] += expense.amount;
+        
+        const catName = expense.category?.name || 'Boshqa';
+        expensesByCategory[catName] = (expensesByCategory[catName] || 0) + expense.amount;
       }
 
       const revenueChart: DashboardStats['revenueChart'] = [];
@@ -1237,20 +1303,10 @@ export const api = {
         todayProfit: todayRevenue - todayExpenses,
         openOrdersCount: dashboard.stats.orders.openCount,
         revenueChart,
-        expensesByType: [
-        {
-          name: 'Ish haqi',
-          value: expensesByTypeTotals.salary
-        },
-        {
-          name: 'Bozor xarajati',
-          value: expensesByTypeTotals.market
-        },
-        {
-          name: 'Boshqa xarajat',
-          value: expensesByTypeTotals.other
-        }],
-
+        expensesByType: Object.entries(expensesByCategory).map(([name, value]) => ({
+          name,
+          value
+        })),
         ordersChart,
         openOrders: openOrders.map(mapOrder)
       };
@@ -1338,9 +1394,14 @@ export const api = {
 
       for (const rawExpense of expenses) {
         const expense = mapExpense(rawExpense);
-        if (expense.type === 'salary') salary += expense.amount;
-        if (expense.type === 'market') market += expense.amount;
-        if (expense.type === 'other') other += expense.amount;
+        const name = expense.category?.name;
+        if (name === 'Ish haqi') {
+          salary += expense.amount;
+        } else if (name === 'Bozor xarajati') {
+          market += expense.amount;
+        } else {
+          other += expense.amount;
+        }
       }
 
       const expensesTotal = salary + market + other;
@@ -1444,6 +1505,32 @@ export const api = {
           itemsAdded: row.itemsCount
         };
       });
+    },
+
+    productPerformance: async (_branchId: string, from: string, to: string): Promise<{
+      summary: { totalProducts: number; totalQty: number; totalRevenue: number };
+      data: {
+        productId: string | null;
+        productName: string;
+        totalQty: number;
+        totalRevenue: number;
+        avgPrice: number;
+        ordersCount: number;
+      }[];
+    }> => {
+      const query = buildQuery({ from, to });
+      const payload = await request<{
+        summary: { totalProducts: number; totalQty: number; totalRevenue: number };
+        data: {
+          productId: string | null;
+          productName: string;
+          totalQty: number;
+          totalRevenue: number;
+          avgPrice: number;
+          ordersCount: number;
+        }[];
+      }>(`/reports/products${query}`);
+      return payload;
     }
   }
 };
