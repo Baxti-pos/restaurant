@@ -57,7 +57,8 @@ const getContext = (req: Request) => {
   return {
     actor: {
       userId: req.auth.sub,
-      role: req.auth.role
+      role: req.auth.role,
+      shiftId: req.shiftId
     },
     branchId: req.activeBranchId
   };

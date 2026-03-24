@@ -30,6 +30,7 @@ import {
   todayStr,
 } from "../../lib/formatters";
 import { clsx } from "clsx";
+import { CommissionModal } from "./CommissionModal";
 import {
   LineChart,
   Line,
@@ -1101,6 +1102,7 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
   const [to, setTo] = useState(todayStr());
   const [data, setData] = useState<WaiterActivity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedWaiter, setSelectedWaiter] = useState<{ id: string; name: string } | null>(null);
   const load = () => {
     setLoading(true);
     api.reports
@@ -1221,6 +1223,17 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
                       </span>
                     </div>
                   </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 italic">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200"
+                      onClick={() => setSelectedWaiter({ id: w.waiterId, name: w.waiterName })}
+                    >
+                      <DollarSign className="h-4 w-4 mr-1.5" />
+                      Balans va To'lov
+                    </Button>
+                  </div>
                 </div>
               ))}
           </div>
@@ -1254,6 +1267,9 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
                     </th>
                     <th className="px-5 py-3.5 text-center font-medium">
                       Mahsulotlar
+                    </th>
+                    <th className="px-5 py-3.5 text-right font-medium">
+                      Amallar
                     </th>
                   </tr>
                 </thead>
@@ -1289,6 +1305,17 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
                         <td className="px-5 py-4 text-center text-slate-600">
                           {w.itemsAdded}
                         </td>
+                        <td className="px-5 py-4 text-right">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200"
+                            onClick={() => setSelectedWaiter({ id: w.waiterId, name: w.waiterName })}
+                          >
+                            <DollarSign className="h-3.5 w-3.5 mr-1" />
+                            Balans
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                 </tbody>
@@ -1296,6 +1323,15 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
             </div>
           </div>
         </>
+      )}
+
+      {selectedWaiter && (
+        <CommissionModal
+          isOpen={true}
+          onClose={() => setSelectedWaiter(null)}
+          waiterId={selectedWaiter.id}
+          waiterName={selectedWaiter.name}
+        />
       )}
     </div>
   );

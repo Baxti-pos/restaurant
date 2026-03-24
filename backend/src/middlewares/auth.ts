@@ -7,6 +7,7 @@ declare global {
       auth?: AppJwtPayload;
       activeBranchId?: string;
       ownerScopeId?: string;
+      shiftId?: string;
     }
   }
 }
@@ -47,4 +48,36 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
       message: "Token yaroqsiz yoki muddati tugagan"
     });
   }
+};
+
+export const shiftMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  if (req.auth?.role === "WAITER" && req.activeBranchId) {
+    try {
+      const { prisma } = await import("../prisma.js");
+      const activeShift = await prisma.waiterShift.findFirst({
+        where: {
+          waiterId: req.auth.sub,
+          branchId: req.activeBranchId,
+          status: "OPEN",
+        },
+        select: { id: true },
+      });
+
+      if (activeShift) {
+        req.shiftId = activeShift.id;
+      }
+    } catch (error) {
+      console.error("Shift middleware error:", error);
+    }
+  }
+  next();
+};
+
+export const requireShift = (req: Request, res: Response, next: NextFunction) => {
+  if (req.auth?.role === "WAITER" && !req.shiftId) {
+    return res.status(403).json({
+      message: "Smena ochilmagan. Iltimos, managerga murojaat qiling."
+    });
+  }
+  next();
 };

@@ -213,13 +213,13 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Manzil
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Smena vaqti
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Holat
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Amallar
                     </th>
                   </tr>
@@ -255,22 +255,22 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                         <span className="text-slate-400">—</span>
                         }
                       </td>
-                      <td className="px-5 py-4 text-slate-600 text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
+                      <td className="px-5 py-4 text-slate-600 text-left">
+                        <div className="flex items-center justify-start space-x-1.5">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           <span>
                             {b.shiftStart} – {b.shiftEnd}
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-center">
+                      <td className="px-5 py-4 text-left">
                         <span
                       className={`px-2 py-1 rounded-full text-xs font-medium ${b.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
 
                           {b.isActive ? 'Faol' : 'Boshqarilmagan'}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-right space-x-1">
+                      <td className="px-5 py-4 text-left space-x-1">
                         <button
                       onClick={() => openEdit(b)}
                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">

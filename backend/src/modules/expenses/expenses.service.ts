@@ -122,6 +122,13 @@ const expenseSelect = {
   amount: true,
   description: true,
   spentAt: true,
+  categoryId: true,
+  category: {
+    select: {
+      id: true,
+      name: true
+    }
+  },
   createdAt: true,
   updatedAt: true,
   createdBy: {
@@ -189,14 +196,16 @@ export const expensesService = {
     const title = parseRequiredString(payload.title, "Sarlavha");
     const amount = parseDecimalField(payload.amount, "Miqdor", { required: true })!;
     const description = parseOptionalString(payload.description);
+    const categoryId = parseOptionalString(payload.categoryId);
     const spentAt = parseDateField(payload.spentAt, "spentAt");
 
-    return prisma.expense.create({
+    return (prisma as any).expense.create({
       data: {
         branchId,
         createdById: ownerId,
         title,
         amount,
+        categoryId: categoryId ?? null,
         description: description ?? null,
         ...(spentAt ? { spentAt } : {})
       },
@@ -252,11 +261,18 @@ export const expensesService = {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "categoryId")) {
+      const categoryId = parseOptionalString(payload.categoryId);
+      if (categoryId !== undefined) {
+        (data as any).categoryId = categoryId;
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       throw new ExpensesError(400, "Yangilash uchun kamida bitta maydon yuboring");
     }
 
-    return prisma.expense.update({
+    return (prisma as any).expense.update({
       where: { id: expenseId },
       data,
       select: expenseSelect

@@ -2,7 +2,6 @@ export type Role = 'owner' | 'manager' | 'waiter';
 export type TableStatus = 'empty' | 'occupied' | 'closing';
 export type OrderStatus = 'open' | 'closed';
 export type PaymentType = 'cash' | 'card' | 'transfer';
-export type ExpenseType = 'salary' | 'market' | 'other';
 export type ShiftStatus = 'active' | 'ended' | 'not_started';
 
 export interface User {
@@ -91,7 +90,9 @@ export interface OrderItem {
   productName: string;
   quantity: number;
   price: number;
+  note?: string;
 }
+
 
 export interface Order {
   id: string;
@@ -108,10 +109,20 @@ export interface Order {
   closedAt?: string;
 }
 
+export interface ExpenseCategory {
+  id: string;
+  branchId: string;
+  name: string;
+}
+
 export interface Expense {
   id: string;
   branchId: string;
-  type: ExpenseType;
+  categoryId: string | null;
+  category?: {
+    id: string;
+    name: string;
+  };
   name: string;
   amount: number;
   note?: string;
@@ -147,4 +158,40 @@ export interface AuthState {
   token: string | null;
   activeBranchId: string | null;
   branches: Branch[];
+}
+
+export interface WaiterShift {
+  id: string;
+  branchId: string;
+  waiterId: string;
+  openedById: string | null;
+  closedById: string | null;
+  status: 'OPEN' | 'CLOSED';
+  openedAt: string;
+  closedAt: string | null;
+  openingNote: string | null;
+  closingNote: string | null;
+  startingCash: number;
+  endingCash: number | null;
+  openedBy?: { fullName: string };
+  closedBy?: { fullName: string };
+}
+
+export interface CommissionPayout {
+  id: string;
+  branchId: string;
+  waiterId: string;
+  amount: number;
+  note: string | null;
+  paidAt: string;
+  createdAt: string;
+}
+
+export interface WaiterCommissionSummary {
+  waiterId: string;
+  salesSharePercent: number;
+  totalEarned: number;
+  totalPaid: number;
+  balance: number;
+  payouts: CommissionPayout[];
 }

@@ -474,7 +474,14 @@ export function TablesPage({
               {orderModal?.items.map((item) => (
                 <tr key={item.id}>
                   <td className="py-2.5 text-slate-800 text-sm leading-tight">
-                    {item.productName}
+                    <div>
+                      <span>{item.productName}</span>
+                      {item.note && (
+                        <span className="block text-[11px] text-amber-600 italic mt-0.5">
+                          📝 {item.note}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2.5">
                     <div className="flex items-center justify-center gap-1">

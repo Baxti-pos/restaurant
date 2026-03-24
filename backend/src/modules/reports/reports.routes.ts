@@ -28,3 +28,9 @@ reportsRouter.get(
 reportsRouter.get("/waiter-activity", requirePermissions(["REPORTS_VIEW"]), (req, res) =>
   reportsController.waiterActivity(req, res)
 );
+
+reportsRouter.get(
+  "/products",
+  requireAnyPermissions(["REPORTS_VIEW", "DASHBOARD_VIEW"]),
+  (req, res) => reportsController.productPerformance(req, res)
+);
