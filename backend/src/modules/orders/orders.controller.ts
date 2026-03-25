@@ -1,17 +1,18 @@
-import type { Request, Response } from "express";
-import { emitToBranch } from "../../socket/index.js";
-import { OrdersError, ordersService } from "./orders.service.js";
+import type { Request, Response } from 'express';
+import { emitToBranch } from '../../socket/index.js';
+import { InventoryError } from '../inventory/inventory.service.js';
+import { OrdersError, ordersService } from './orders.service.js';
 
 const handleError = (res: Response, error: unknown) => {
-  if (error instanceof OrdersError) {
+  if (error instanceof OrdersError || error instanceof InventoryError) {
     return res.status(error.statusCode).json({
       message: error.message
     });
   }
 
-  console.error("Orders controller xatosi:", error);
+  console.error('Orders controller xatosi:', error);
   return res.status(500).json({
-    message: "Ichki server xatosi"
+    message: 'Ichki server xatosi'
   });
 };
 
@@ -24,7 +25,7 @@ const emitSafe = (branchId: string, event: string, payload: unknown) => {
 };
 
 const emitTablesUpdated = (branchId: string, action: string, tableId: string) => {
-  emitSafe(branchId, "tables.updated", {
+  emitSafe(branchId, 'tables.updated', {
     action,
     tableId,
     branchId,
@@ -33,7 +34,7 @@ const emitTablesUpdated = (branchId: string, action: string, tableId: string) =>
 };
 
 const emitOrderUpdated = (branchId: string, action: string, orderId: string) => {
-  emitSafe(branchId, "order.updated", {
+  emitSafe(branchId, 'order.updated', {
     action,
     orderId,
     branchId,
@@ -42,8 +43,23 @@ const emitOrderUpdated = (branchId: string, action: string, orderId: string) => 
 };
 
 const emitOrderClosed = (branchId: string, orderId: string) => {
-  emitSafe(branchId, "order.closed", {
+  emitSafe(branchId, 'order.closed', {
     orderId,
+    branchId,
+    timestamp: new Date().toISOString()
+  });
+};
+
+const emitInventoryUpdated = (
+  branchId: string,
+  action: string,
+  entity: string,
+  entityId?: string | null
+) => {
+  emitSafe(branchId, 'inventory.updated', {
+    action,
+    entity,
+    entityId: entityId ?? null,
     branchId,
     timestamp: new Date().toISOString()
   });
@@ -69,7 +85,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const data = await ordersService.list(ctx.branchId, req.query as Record<string, unknown>);
@@ -86,7 +102,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const data = await ordersService.listOpen(ctx.branchId);
@@ -103,7 +119,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const data = await ordersService.getById(ctx.branchId, req.params.orderId);
@@ -120,7 +136,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const result = await ordersService.openForTable({
@@ -129,16 +145,16 @@ export const ordersController = {
         payload: req.body
       });
 
-      emitOrderUpdated(ctx.branchId, result.created ? "opened" : "opened_existing", result.order.id);
+      emitOrderUpdated(ctx.branchId, result.created ? 'opened' : 'opened_existing', result.order.id);
 
       if (result.tableStatusChanged) {
-        emitTablesUpdated(ctx.branchId, "occupied", result.table.id);
+        emitTablesUpdated(ctx.branchId, 'occupied', result.table.id);
       }
 
       return res.status(result.created ? 201 : 200).json({
         message: result.created
-          ? "Stol uchun buyurtma ochildi"
-          : "Stolda mavjud ochiq buyurtma qaytarildi",
+          ? 'Stol uchun buyurtma ochildi'
+          : 'Stolda mavjud ochiq buyurtma qaytarildi',
         data: result
       });
     } catch (error) {
@@ -150,7 +166,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const result = await ordersService.addItem({
@@ -160,7 +176,7 @@ export const ordersController = {
         payload: req.body
       });
 
-      emitOrderUpdated(ctx.branchId, "item_added", result.order.id);
+      emitOrderUpdated(ctx.branchId, 'item_added', result.order.id);
 
       return res.status(200).json({
         message: "Item buyurtmaga qo'shildi",
@@ -175,7 +191,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const result = await ordersService.changeItem({
@@ -185,10 +201,10 @@ export const ordersController = {
         payload: req.body
       });
 
-      emitOrderUpdated(ctx.branchId, "item_changed", result.order.id);
+      emitOrderUpdated(ctx.branchId, 'item_changed', result.order.id);
 
       return res.status(200).json({
-        message: "Item yangilandi",
+        message: 'Item yangilandi',
         data: result
       });
     } catch (error) {
@@ -200,7 +216,7 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const result = await ordersService.removeItem({
@@ -209,10 +225,10 @@ export const ordersController = {
         itemIdRaw: req.params.itemId
       });
 
-      emitOrderUpdated(ctx.branchId, "item_removed", result.order.id);
+      emitOrderUpdated(ctx.branchId, 'item_removed', result.order.id);
 
       return res.status(200).json({
-        message: "Item buyurtmadan olib tashlandi",
+        message: 'Item buyurtmadan olib tashlandi',
         data: result
       });
     } catch (error) {
@@ -224,23 +240,28 @@ export const ordersController = {
     try {
       const ctx = getContext(req);
       if (!ctx) {
-        return res.status(401).json({ message: "Autorizatsiya talab qilinadi" });
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
       }
 
       const result = await ordersService.closeOrder({
         branchId: ctx.branchId,
         orderIdRaw: req.params.orderId,
-        payload: req.body
+        payload: req.body,
+        actor: ctx.actor
       });
 
       emitOrderClosed(ctx.branchId, result.order.id);
 
       if (result.tableStatusChanged && result.table) {
-        emitTablesUpdated(ctx.branchId, "available", result.table.id);
+        emitTablesUpdated(ctx.branchId, 'available', result.table.id);
+      }
+
+      if (result.inventoryChanged) {
+        emitInventoryUpdated(ctx.branchId, 'deducted', 'order', result.order.id);
       }
 
       return res.status(200).json({
-        message: "Buyurtma yopildi",
+        message: 'Buyurtma yopildi',
         data: result
       });
     } catch (error) {
