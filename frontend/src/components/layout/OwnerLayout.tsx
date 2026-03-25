@@ -13,6 +13,7 @@ import {
   Utensils,
   UtensilsCrossed,
   Package,
+  Boxes,
   MoreHorizontal,
   BarChart3 } from
 'lucide-react';
@@ -36,6 +37,7 @@ const navItems = [
   { id: 'tables', label: 'Stollar', icon: UtensilsCrossed, path: '/tables' },
   { id: 'orders', label: 'Buyurtmalar', icon: ShoppingBag, path: '/orders' },
   { id: 'products', label: 'Mahsulotlar', icon: Package, path: '/products' },
+  { id: 'inventory', label: 'Inventar', icon: Boxes, path: '/inventory' },
   { id: 'product-analytics', label: 'Analitika', icon: BarChart3, path: '/product-analytics' },
   { id: 'expenses', label: 'Xarajatlar', icon: Receipt, path: '/expenses' },
   { id: 'waiters', label: 'Girgittonlar', icon: Users, path: '/waiters' },
@@ -114,6 +116,7 @@ export function OwnerLayout({
     if (pageId === 'tables') return hasAnyPermission(user, ['TABLES_VIEW', 'TABLES_MANAGE']);
     if (pageId === 'orders') return hasAnyPermission(user, ['ORDERS_VIEW', 'REPORTS_VIEW']);
     if (pageId === 'products' || pageId === 'product-analytics') return hasPermission(user, 'PRODUCTS_VIEW');
+    if (pageId === 'inventory') return hasAnyPermission(user, ['INVENTORY_VIEW', 'INVENTORY_MANAGE']);
     if (pageId === 'expenses') return hasPermission(user, 'EXPENSES_VIEW');
     if (pageId === 'waiters') return hasPermission(user, 'WAITERS_VIEW');
     if (pageId === 'profile') return true;
@@ -371,6 +374,18 @@ export function OwnerLayout({
           <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl z-50 lg:hidden pb-[env(safe-area-inset-bottom)] animate-in slide-in-from-bottom duration-200">
             <div className="p-4 space-y-1">
               <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+              {canAccessPage('inventory') && (
+                <button
+                  onClick={() => handleMobileNavigate('/inventory')}
+                  className={clsx(
+                    'w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                    location.pathname === '/inventory' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-700 hover:bg-slate-50'
+                  )}
+                >
+                  <Boxes className='h-5 w-5' />
+                  <span>Inventar</span>
+                </button>
+              )}
               {canAccessPage('waiters') && (
                 <button
                   onClick={() => handleMobileNavigate('/waiters')}

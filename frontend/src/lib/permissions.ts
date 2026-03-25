@@ -10,6 +10,8 @@ export const MANAGER_PERMISSIONS = [
   'ORDERS_CLOSE',
   'PRODUCTS_VIEW',
   'PRODUCTS_MANAGE',
+  'INVENTORY_VIEW',
+  'INVENTORY_MANAGE',
   'EXPENSES_VIEW',
   'EXPENSES_MANAGE',
   'WAITERS_VIEW',
@@ -68,6 +70,16 @@ export const MANAGER_PERMISSION_OPTIONS: Array<{
     key: 'PRODUCTS_MANAGE',
     label: 'Mahsulotlarni boshqarish',
     description: 'Mahsulot va kategoriya yaratish hamda tahrirlash'
+  },
+  {
+    key: 'INVENTORY_VIEW',
+    label: 'Inventarni korish',
+    description: 'Ingredient, retsept va qoldiq malumotlarini korish'
+  },
+  {
+    key: 'INVENTORY_MANAGE',
+    label: 'Inventarni boshqarish',
+    description: 'Ingredient, retsept va kirimlarni boshqarish'
   },
   {
     key: 'EXPENSES_VIEW',

@@ -1,4 +1,5 @@
 import { getAuth } from './auth';
+import { inventoryApi } from './inventoryApi';
 import { toLocalDateKey, todayStr } from './formatters';
 import { hasPermission } from './permissions';
 import {
@@ -1532,5 +1533,7 @@ export const api = {
       }>(`/reports/products${query}`);
       return payload;
     }
-  }
+  },
+
+  inventory: inventoryApi
 };
