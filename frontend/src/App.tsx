@@ -1,25 +1,25 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { LoginPage } from './pages/LoginPage';
-import { BranchSelectPage } from './pages/BranchSelectPage';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { OwnerLayout } from './components/layout/OwnerLayout';
-import { DashboardPage } from './pages/owner/DashboardPage';
-import { BranchesPage } from './pages/owner/BranchesPage';
-import { WaitersPage } from './pages/owner/WaitersPage';
-import { TablesPage } from './pages/owner/TablesPage';
-import { ProductsPage } from './pages/owner/ProductsPage';
-import { ExpensesPage } from './pages/owner/ExpensesPage';
-import { OrdersPage } from './pages/owner/OrdersPage';
-import { ProfilePage } from './pages/owner/ProfilePage';
-import { ManagersPage } from './pages/owner/ManagersPage';
-import { ProductAnalyticsPage } from './pages/owner/ProductAnalyticsPage';
 import { ToastProvider } from './components/ui/Toast';
-import { getAuth, setAuth, clearAuth } from './lib/auth';
+import { clearAuth, getAuth, setAuth } from './lib/auth';
 import { api } from './lib/api';
-import { connectRealtime, disconnectRealtime } from './lib/socket';
-import { User, Branch } from './lib/types';
+import { Branch, User } from './lib/types';
 import { hasAnyPermission, hasPermission } from './lib/permissions';
-
+import { connectRealtime, disconnectRealtime } from './lib/socket';
+import { BranchSelectPage } from './pages/BranchSelectPage';
+import { LoginPage } from './pages/LoginPage';
+import { BranchesPage } from './pages/owner/BranchesPage';
+import { DashboardPage } from './pages/owner/DashboardPage';
+import { ExpensesPage } from './pages/owner/ExpensesPage';
+import { InventoryPage } from './pages/owner/InventoryPage';
+import { ManagersPage } from './pages/owner/ManagersPage';
+import { OrdersPage } from './pages/owner/OrdersPage';
+import { ProductAnalyticsPage } from './pages/owner/ProductAnalyticsPage';
+import { ProductsPage } from './pages/owner/ProductsPage';
+import { ProfilePage } from './pages/owner/ProfilePage';
+import { TablesPage } from './pages/owner/TablesPage';
+import { WaitersPage } from './pages/owner/WaitersPage';
 
 const canAccessPage = (user: User | null, page: string) => {
   if (!user) return false;
@@ -36,6 +36,7 @@ const canAccessPage = (user: User | null, page: string) => {
   if (page === 'tables') return hasAnyPermission(user, ['TABLES_VIEW', 'TABLES_MANAGE']);
   if (page === 'orders') return hasAnyPermission(user, ['ORDERS_VIEW', 'REPORTS_VIEW']);
   if (page === 'products' || page === 'product-analytics') return hasPermission(user, 'PRODUCTS_VIEW');
+  if (page === 'inventory') return hasAnyPermission(user, ['INVENTORY_VIEW', 'INVENTORY_MANAGE']);
   if (page === 'expenses') return hasPermission(user, 'EXPENSES_VIEW');
   if (page === 'waiters') return hasPermission(user, 'WAITERS_VIEW');
 
@@ -48,6 +49,7 @@ const resolveFallbackPage = (user: User | null): string => {
     'tables',
     'orders',
     'products',
+    'inventory',
     'expenses',
     'waiters',
     'branches',
@@ -58,6 +60,7 @@ const resolveFallbackPage = (user: User | null): string => {
   for (const page of orderedPages) {
     if (canAccessPage(user, page)) return `/${page}`;
   }
+
   return '/profile';
 };
 
@@ -113,7 +116,13 @@ function AppRoutes() {
             setActiveBranchId(fallbackBranchId);
             setAppReady(true);
             return;
-          } catch {}
+          } catch {
+            clearAuth();
+            setUser(null);
+            setIsAuthenticated(false);
+            setAppReady(true);
+            return;
+          }
         }
 
         clearAuth();
@@ -125,7 +134,7 @@ function AppRoutes() {
 
       try {
         const list = await refreshBranches();
-        if (auth.activeBranchId && list.some(b => b.id === auth.activeBranchId)) {
+        if (auth.activeBranchId && list.some((branch) => branch.id === auth.activeBranchId)) {
           setActiveBranchId(auth.activeBranchId);
         }
       } catch {
@@ -134,24 +143,32 @@ function AppRoutes() {
         setIsAuthenticated(false);
         setActiveBranchId(null);
       }
+
       setAppReady(true);
     };
 
     void bootstrap();
   }, []);
 
-  const handleLogin = async (u: User, token: string, branchId: string | null = null, bList: Branch[] = []) => {
-    setUser(u);
+  const handleLogin = async (
+    nextUser: User,
+    token: string,
+    branchId: string | null = null,
+    branchList: Branch[] = []
+  ) => {
+    setUser(nextUser);
     setIsAuthenticated(true);
-    setAuth({ user: u, token, activeBranchId: branchId, branches: bList });
+    setAuth({ user: nextUser, token, activeBranchId: branchId, branches: branchList });
     setActiveBranchId(branchId);
-    setBranches(bList);
+    setBranches(branchList);
 
-    if (u.role === 'owner') {
-      try { await refreshBranches(); } catch {}
+    if (nextUser.role === 'owner') {
+      try {
+        await refreshBranches();
+      } catch {}
     }
-    
-    navigate(resolveFallbackPage(u));
+
+    navigate(resolveFallbackPage(nextUser));
   };
 
   const handleBranchSelect = async (branchId: string) => {
@@ -208,25 +225,37 @@ function AppRoutes() {
 
   if (!appReady) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-10 w-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Yuklanmoqda...</p>
+      <div className='min-h-screen bg-slate-50 flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='h-10 w-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3' />
+          <p className='text-slate-500 text-sm'>Yuklanmoqda...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) return <LoginPage onLogin={handleLogin} />;
-  if (!activeBranchId) return <BranchSelectPage branches={branches} onSelect={handleBranchSelect} onLogout={handleLogout} />;
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
-  const activeBranch = branches.find(b => b.id === activeBranchId);
+  if (!activeBranchId) {
+    return (
+      <BranchSelectPage
+        branches={branches}
+        onSelect={handleBranchSelect}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  const activeBranch = branches.find((branch) => branch.id === activeBranchId);
   const activeBranchName = activeBranch?.name || '';
 
   const ProtectedRoute = ({ children, page }: { children: React.ReactNode; page: string }) => {
     if (!canAccessPage(user, page)) {
       return <Navigate to={resolveFallbackPage(user)} replace />;
     }
+
     return <>{children}</>;
   };
 
@@ -239,17 +268,92 @@ function AppRoutes() {
       onLogout={handleLogout}
     >
       <Routes>
-        <Route path="/dashboard" element={<ProtectedRoute page="dashboard"><DashboardPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} onNavigate={p => navigate(`/${p}`)} /></ProtectedRoute>} />
-        <Route path="/branches" element={<ProtectedRoute page="branches"><BranchesPage onBranchesChange={() => refreshBranches()} /></ProtectedRoute>} />
-        <Route path="/waiters" element={<ProtectedRoute page="waiters"><WaitersPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/managers" element={<ProtectedRoute page="managers"><ManagersPage branches={branches} /></ProtectedRoute>} />
-        <Route path="/tables" element={<ProtectedRoute page="tables"><TablesPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/products" element={<ProtectedRoute page="products"><ProductsPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/product-analytics" element={<ProtectedRoute page="product-analytics"><ProductAnalyticsPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/expenses" element={<ProtectedRoute page="expenses"><ExpensesPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/orders" element={<ProtectedRoute page="orders"><OrdersPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProfilePage user={user!} onUserChange={handleUserChange} />} />
-        <Route path="*" element={<Navigate to={resolveFallbackPage(user)} replace />} />
+        <Route
+          path='/dashboard'
+          element={
+            <ProtectedRoute page='dashboard'>
+              <DashboardPage
+                activeBranchId={activeBranchId}
+                activeBranchName={activeBranchName}
+                onNavigate={(page) => navigate(`/${page}`)}
+              />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/branches'
+          element={
+            <ProtectedRoute page='branches'>
+              <BranchesPage onBranchesChange={() => refreshBranches()} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/waiters'
+          element={
+            <ProtectedRoute page='waiters'>
+              <WaitersPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/managers'
+          element={
+            <ProtectedRoute page='managers'>
+              <ManagersPage branches={branches} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/tables'
+          element={
+            <ProtectedRoute page='tables'>
+              <TablesPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/products'
+          element={
+            <ProtectedRoute page='products'>
+              <ProductsPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/inventory'
+          element={
+            <ProtectedRoute page='inventory'>
+              <InventoryPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/product-analytics'
+          element={
+            <ProtectedRoute page='product-analytics'>
+              <ProductAnalyticsPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/expenses'
+          element={
+            <ProtectedRoute page='expenses'>
+              <ExpensesPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/orders'
+          element={
+            <ProtectedRoute page='orders'>
+              <OrdersPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+            </ProtectedRoute>
+          }
+        />
+        <Route path='/profile' element={<ProfilePage user={user!} onUserChange={handleUserChange} />} />
+        <Route path='*' element={<Navigate to={resolveFallbackPage(user)} replace />} />
       </Routes>
     </OwnerLayout>
   );
@@ -263,4 +367,3 @@ export function App() {
     </BrowserRouter>
   );
 }
-

@@ -7,6 +7,7 @@ export type RealtimeEventName =
   | 'order.updated'
   | 'order.closed'
   | 'products.updated'
+  | 'inventory.updated'
   | 'join_branch_ack';
 
 export interface RealtimeEvent<T = unknown> {
@@ -51,6 +52,7 @@ const bindSocketEvents = (instance: Socket) => {
   instance.on('order.updated', (payload) => notify('order.updated', payload));
   instance.on('order.closed', (payload) => notify('order.closed', payload));
   instance.on('products.updated', (payload) => notify('products.updated', payload));
+  instance.on('inventory.updated', (payload) => notify('inventory.updated', payload));
 };
 
 export const connectRealtime = (branchId: string) => {
@@ -92,4 +94,3 @@ export const onRealtimeEvent = (listener: RealtimeListener) => {
     listeners.delete(listener);
   };
 };
-

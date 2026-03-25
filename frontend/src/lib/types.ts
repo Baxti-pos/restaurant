@@ -3,6 +3,13 @@ export type TableStatus = 'empty' | 'occupied' | 'closing';
 export type OrderStatus = 'open' | 'closed';
 export type PaymentType = 'cash' | 'card' | 'transfer';
 export type ShiftStatus = 'active' | 'ended' | 'not_started';
+export type InventoryUnit = 'GRAM' | 'MILLILITER' | 'PIECE';
+export type StockMovementType =
+  | 'INITIAL_IN'
+  | 'PURCHASE_IN'
+  | 'SALE_OUT'
+  | 'ADJUSTMENT_IN'
+  | 'ADJUSTMENT_OUT';
 
 export interface User {
   id: string;
@@ -93,7 +100,6 @@ export interface OrderItem {
   note?: string;
 }
 
-
 export interface Order {
   id: string;
   branchId: string;
@@ -135,9 +141,9 @@ export interface DashboardStats {
   todayExpenses: number;
   todayProfit: number;
   openOrdersCount: number;
-  revenueChart: {date: string;tushum: number;rashod: number;xarajat?: number;}[];
-  expensesByType: {name: string;value: number;}[];
-  ordersChart: {date: string;soni: number;}[];
+  revenueChart: { date: string; tushum: number; rashod: number; xarajat?: number }[];
+  expensesByType: { name: string; value: number }[];
+  ordersChart: { date: string; soni: number }[];
   openOrders: Order[];
 }
 
@@ -194,4 +200,145 @@ export interface WaiterCommissionSummary {
   totalPaid: number;
   balance: number;
   payouts: CommissionPayout[];
+}
+
+export interface Ingredient {
+  id: string;
+  branchId: string;
+  name: string;
+  unit: InventoryUnit;
+  minQty: number;
+  currentQty: number;
+  avgUnitCost: number;
+  inventoryValue: number;
+  isLowStock: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryPurchaseItem {
+  id: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  ingredient: {
+    id: string;
+    name: string;
+    unit: InventoryUnit;
+  };
+}
+
+export interface InventoryPurchase {
+  id: string;
+  branchId: string;
+  supplierName: string | null;
+  note: string | null;
+  totalAmount: number;
+  purchasedAt: string;
+  createdAt: string;
+  createdBy: {
+    id: string;
+    fullName: string;
+  } | null;
+  items: InventoryPurchaseItem[];
+}
+
+export interface StockMovement {
+  id: string;
+  type: StockMovementType;
+  quantityChange: number;
+  quantityAfter: number;
+  unitCost: number | null;
+  totalCost: number | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  note: string | null;
+  createdAt: string;
+  ingredient: {
+    id: string;
+    name: string;
+    unit: InventoryUnit;
+  };
+  createdBy: {
+    id: string;
+    fullName: string;
+  } | null;
+}
+
+export interface IngredientUsage {
+  ingredientId: string;
+  ingredientName: string;
+  unit: InventoryUnit;
+  usageQty: number;
+  usageCost: number;
+}
+
+export interface InventoryProductRecipeItem {
+  id: string;
+  ingredientId: string;
+  quantity: number;
+  ingredient: {
+    id: string;
+    name: string;
+    unit: InventoryUnit;
+    currentQty: number;
+    avgUnitCost: number;
+    isActive: boolean;
+  };
+}
+
+export interface InventoryProductRecipe {
+  id: string;
+  note: string | null;
+  isActive: boolean;
+  items: InventoryProductRecipeItem[];
+}
+
+export interface InventoryProductSummary {
+  id: string;
+  branchId: string;
+  name: string;
+  price: number;
+  isActive: boolean;
+  category: {
+    id: string;
+    name: string;
+  } | null;
+  tracked: boolean;
+  theoreticalCost: number;
+  possibleQty: number | null;
+  recipe: InventoryProductRecipe | null;
+}
+
+export interface InventoryDashboard {
+  range: {
+    from: string;
+    to: string;
+  };
+  summary: {
+    ingredientsCount: number;
+    trackedProductsCount: number;
+    lowStockCount: number;
+    inventoryValue: number;
+    purchaseTotal: number;
+    purchaseCount: number;
+    usageCostTotal: number;
+  };
+  lowStock: Ingredient[];
+  canMakeNow: InventoryProductSummary[];
+  topUsage: IngredientUsage[];
+  productCosts: InventoryProductSummary[];
+}
+
+export interface InventoryUsageReport {
+  range: {
+    from: string;
+    to: string;
+  };
+  summary: {
+    totalUsageCost: number;
+    totalIngredients: number;
+  };
+  data: IngredientUsage[];
 }

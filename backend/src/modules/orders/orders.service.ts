@@ -1,5 +1,6 @@
 import { OrderStatus, PaymentMethod, Prisma, TableStatus } from "@prisma/client";
 import { prisma } from "../../prisma.js";
+import { applyInventoryForClosedOrderTx } from "../inventory/inventory.service.js";
 import type { AppRole } from "../auth/auth.service.js";
 
 type TxClient = Prisma.TransactionClient;
@@ -743,8 +744,9 @@ export const ordersService = {
     branchId: string;
     orderIdRaw: unknown;
     payload: unknown;
+    actor?: OrderActor;
   }) {
-    const { branchId, orderIdRaw, payload } = params;
+    const { branchId, orderIdRaw, payload, actor } = params;
     await ensureActiveBranch(branchId);
 
     if (!isObject(payload)) {
@@ -770,6 +772,12 @@ export const ordersService = {
       const finalTotal = clampMinZero(subtotal.minus(finalDiscount));
       const finalPaid =
         paidAmount === undefined || paidAmount === null ? finalTotal : paidAmount;
+      const inventoryResult = await applyInventoryForClosedOrderTx(tx, {
+        branchId,
+        orderId: openOrder.id,
+        totalAmount: finalTotal,
+        actor: actor ? { userId: actor.userId } : undefined
+      });
 
       await tx.order.update({
         where: { id: openOrder.id },
@@ -779,6 +787,8 @@ export const ordersService = {
           discountAmount: finalDiscount,
           totalAmount: finalTotal,
           paidAmount: finalPaid,
+          costAmount: inventoryResult.costAmount,
+          grossProfitAmount: inventoryResult.grossProfitAmount,
           closedAt: new Date(),
           ...(note !== undefined ? { note } : {})
         }
@@ -831,7 +841,8 @@ export const ordersService = {
       return {
         order,
         table,
-        tableStatusChanged
+        tableStatusChanged,
+        inventoryChanged: inventoryResult.inventoryChanged
       };
     });
   }
