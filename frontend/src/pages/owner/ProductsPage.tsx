@@ -9,6 +9,7 @@ import { TableSkeleton } from '../../components/ui/LoadingSkeleton';
 import { toast } from '../../components/ui/Toast';
 import { Plus, Edit2, Trash2, ShoppingBag, Search, Tag } from 'lucide-react';
 import { api } from '../../lib/api';
+import { productsFeatureApi } from '../../lib/productsFeatureApi';
 import { getAuth } from '../../lib/auth';
 import { hasPermission } from '../../lib/permissions';
 import { onRealtimeEvent } from '../../lib/socket';
@@ -41,6 +42,9 @@ export function ProductsPage({
   const [prodForm, setProdForm] = useState({
     name: '',
     price: '',
+    portionLabel: '',
+    imageUrl: '',
+    description: '',
     categoryId: '',
     isActive: true
   });
@@ -64,9 +68,9 @@ export function ProductsPage({
   const load = async () => {
     setLoading(true);
     const [cats, prods] = await Promise.all([
-    api.categories.listByBranch(activeBranchId),
-    api.products.listByBranch(activeBranchId)]
-    );
+      api.categories.listByBranch(activeBranchId),
+      productsFeatureApi.list()
+    ]);
     setCategories(cats);
     setProducts(prods);
     setSelectedCat((prev) =>
@@ -184,6 +188,9 @@ export function ProductsPage({
     setProdForm({
       name: '',
       price: '',
+      portionLabel: '',
+      imageUrl: '',
+      description: '',
       categoryId: selectedCat !== ALL_CATEGORY_ID ? selectedCat : categories[0]?.id || '',
       isActive: true
     });
@@ -199,6 +206,9 @@ export function ProductsPage({
     setProdForm({
       name: p.name,
       price: String(p.price),
+      portionLabel: p.portionLabel ?? '',
+      imageUrl: p.imageUrl ?? '',
+      description: p.description ?? '',
       categoryId: p.categoryId,
       isActive: p.isActive
     });
@@ -224,17 +234,19 @@ export function ProductsPage({
     setSavingProd(true);
     try {
       const data = {
-        name: prodForm.name,
+        name: prodForm.name.trim(),
         price: Number(prodForm.price),
         categoryId: prodForm.categoryId,
-        isActive: prodForm.isActive,
-        branchId: activeBranchId
+        portionLabel: prodForm.portionLabel.trim() || null,
+        imageUrl: prodForm.imageUrl.trim() || null,
+        description: prodForm.description.trim() || null,
+        isActive: prodForm.isActive
       };
       if (editingProd) {
-        await api.products.update(editingProd.id, data);
+        await productsFeatureApi.update(editingProd.id, data);
         toast.success('Mahsulot yangilandi');
       } else {
-        await api.products.create(data);
+        await productsFeatureApi.create(data);
         toast.success("Mahsulot qo'shildi");
       }
       setProductModal({
@@ -253,7 +265,7 @@ export function ProductsPage({
     const nextIsActive = !product.isActive;
     setTogglingProdId(product.id);
     try {
-      await api.products.update(product.id, {
+      await productsFeatureApi.update(product.id, {
         isActive: nextIsActive
       });
       toast.success(nextIsActive ? 'Mahsulot faol qilindi' : 'Mahsulot nofaol qilindi');
@@ -721,6 +733,39 @@ export function ProductsPage({
             }}
             error={prodErrors.price}
             required />
+
+          <Input
+            label="Porsiya / o'lcham"
+            placeholder="Masalan: 350 ml, 1 porsiya"
+            value={prodForm.portionLabel}
+            onChange={(e) => {
+              setProdForm((p) => ({
+                ...p,
+                portionLabel: e.target.value
+              }));
+            }} />
+
+          <Input
+            label="Rasm URL"
+            placeholder="https://..."
+            value={prodForm.imageUrl}
+            onChange={(e) => {
+              setProdForm((p) => ({
+                ...p,
+                imageUrl: e.target.value
+              }));
+            }} />
+
+          <Input
+            label="Qisqa tavsif"
+            placeholder="Mijozga ko'rinadigan qisqa izoh"
+            value={prodForm.description}
+            onChange={(e) => {
+              setProdForm((p) => ({
+                ...p,
+                description: e.target.value
+              }));
+            }} />
 
           <Select
             label="Kategoriya"

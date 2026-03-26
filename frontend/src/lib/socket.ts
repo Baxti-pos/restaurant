@@ -8,7 +8,13 @@ export type RealtimeEventName =
   | 'order.closed'
   | 'products.updated'
   | 'inventory.updated'
-  | 'join_branch_ack';
+  | 'join_branch_ack'
+  | 'qr.order.created'
+  | 'qr.order.accepted'
+  | 'qr.order.rejected'
+  | 'service.request.created'
+  | 'service.request.acknowledged'
+  | 'service.request.completed';
 
 export interface RealtimeEvent<T = unknown> {
   event: RealtimeEventName;
@@ -53,6 +59,16 @@ const bindSocketEvents = (instance: Socket) => {
   instance.on('order.closed', (payload) => notify('order.closed', payload));
   instance.on('products.updated', (payload) => notify('products.updated', payload));
   instance.on('inventory.updated', (payload) => notify('inventory.updated', payload));
+  instance.on('qr.order.created', (payload) => notify('qr.order.created', payload));
+  instance.on('qr.order.accepted', (payload) => notify('qr.order.accepted', payload));
+  instance.on('qr.order.rejected', (payload) => notify('qr.order.rejected', payload));
+  instance.on('service.request.created', (payload) => notify('service.request.created', payload));
+  instance.on('service.request.acknowledged', (payload) =>
+    notify('service.request.acknowledged', payload)
+  );
+  instance.on('service.request.completed', (payload) =>
+    notify('service.request.completed', payload)
+  );
 };
 
 export const connectRealtime = (branchId: string) => {
