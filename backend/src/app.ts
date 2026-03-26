@@ -5,11 +5,13 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { branchesRouter } from "./modules/branches/branches.routes.js";
 import { categoriesRouter } from "./modules/categories/categories.routes.js";
 import { expensesRouter } from "./modules/expenses/expenses.routes.js";
+import { guestRequestsRouter } from "./modules/guest-requests/guest-requests.routes.js";
 import { inventoryRouter } from "./modules/inventory/inventory.routes.js";
 import { managersRouter } from "./modules/managers/managers.routes.js";
 import { meRouter } from "./modules/me/me.routes.js";
 import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { productsRouter } from "./modules/products/products.routes.js";
+import { publicQrRouter } from "./modules/public-qr/public-qr.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { tablesRouter } from "./modules/tables/tables.routes.js";
 import { waitersRouter } from "./modules/waiters/waiters.routes.js";
@@ -28,9 +30,7 @@ app.use((req, res, next) => {
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
 
-  console.log(
-    `[REQ] ${startedAtIso} ${req.method} ${req.originalUrl} ip=${req.ip ?? "-"}`
-  );
+  console.log(`[REQ] ${startedAtIso} ${req.method} ${req.originalUrl} ip=${req.ip ?? "-"}`);
 
   res.on("finish", () => {
     const durationMs = Date.now() - startedAt;
@@ -44,6 +44,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use("/public/qr", publicQrRouter);
 app.use("/auth", authRouter);
 app.use("/branches", branchesRouter);
 app.use("/waiters", waitersRouter);
@@ -52,6 +53,7 @@ app.use("/categories", categoriesRouter);
 app.use("/products", productsRouter);
 app.use("/inventory", inventoryRouter);
 app.use("/tables", tablesRouter);
+app.use("/guest-requests", guestRequestsRouter);
 app.use("/orders", ordersRouter);
 app.use("/expenses", expensesRouter);
 app.use("/reports", reportsRouter);
