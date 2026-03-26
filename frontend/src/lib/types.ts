@@ -10,6 +10,23 @@ export type StockMovementType =
   | 'SALE_OUT'
   | 'ADJUSTMENT_IN'
   | 'ADJUSTMENT_OUT';
+export type OrderItemSource = 'STAFF' | 'QR_CUSTOMER';
+export type OrderItemFulfillmentStatus =
+  | 'ACCEPTED'
+  | 'PREPARING'
+  | 'READY'
+  | 'SERVED'
+  | 'CANCELED';
+export type QrOrderRequestStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED';
+export type QrOrderTrackingStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'PREPARING'
+  | 'READY'
+  | 'SERVED'
+  | 'REJECTED'
+  | 'CANCELED';
+export type ServiceRequestStatus = 'PENDING' | 'ACKNOWLEDGED' | 'COMPLETED' | 'CANCELED';
 
 export interface User {
   id: string;
@@ -70,9 +87,33 @@ export interface TableItem {
   branchId: string;
   name: string;
   status: TableStatus;
+  seatsCount?: number;
   currentOrderId?: string;
   currentOrderWaiterId?: string;
   currentOrderWaiterName?: string;
+  qrEnabled?: boolean;
+  selfOrderEnabled?: boolean;
+  callWaiterEnabled?: boolean;
+  qrPublicUrl?: string | null;
+  qrVersion?: number;
+  qrLastGeneratedAt?: string | null;
+  qrLastScannedAt?: string | null;
+  pendingQrOrdersCount?: number;
+  activeServiceRequestsCount?: number;
+  readyItemsCount?: number;
+}
+
+export interface TableQrData {
+  tableId: string;
+  tableName: string;
+  qrPublicToken: string;
+  qrEnabled: boolean;
+  selfOrderEnabled: boolean;
+  callWaiterEnabled: boolean;
+  qrVersion: number;
+  qrLastGeneratedAt: string | null;
+  publicUrl: string;
+  svgMarkup: string;
 }
 
 export interface Category {
@@ -88,15 +129,22 @@ export interface Product {
   categoryId: string;
   name: string;
   price: number;
+  portionLabel?: string | null;
+  imageUrl?: string | null;
+  description?: string | null;
   isActive: boolean;
 }
 
 export interface OrderItem {
   id: string;
   productId: string;
+  requestId?: string;
+  guestSessionId?: string;
   productName: string;
   quantity: number;
   price: number;
+  source?: OrderItemSource;
+  fulfillmentStatus?: OrderItemFulfillmentStatus;
   note?: string;
 }
 
@@ -113,6 +161,158 @@ export interface Order {
   paymentType?: PaymentType;
   createdAt: string;
   closedAt?: string;
+}
+
+export interface QrOrderRequestPreviewItem {
+  id: string;
+  productName: string;
+  portionLabel?: string | null;
+  imageUrl?: string | null;
+  quantity: number;
+  unitPrice: number;
+  note?: string | null;
+}
+
+export interface PendingQrOrderRequest {
+  id: string;
+  publicCode: string;
+  note?: string | null;
+  createdAt: string;
+  subtotalAmount: number;
+  itemCount: number;
+  table: {
+    id: string;
+    name: string;
+  };
+  items?: QrOrderRequestPreviewItem[];
+}
+
+export interface GuestServiceRequest {
+  id: string;
+  publicCode: string;
+  note?: string | null;
+  status: ServiceRequestStatus;
+  createdAt: string;
+  table: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface GuestRequestsOverview {
+  pendingOrders: PendingQrOrderRequest[];
+  activeServiceRequests: GuestServiceRequest[];
+}
+
+export interface PublicMenuCategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface PublicMenuProduct {
+  id: string;
+  branchId: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  price: number;
+  portionLabel?: string | null;
+  imageUrl?: string | null;
+  description?: string | null;
+  sortOrder: number;
+}
+
+export interface PublicMenuBootstrap {
+  branch: {
+    id: string;
+    name: string;
+  };
+  table: {
+    id: string;
+    name: string;
+    status: string;
+    qrEnabled: boolean;
+    selfOrderEnabled: boolean;
+    callWaiterEnabled: boolean;
+  };
+  categories: PublicMenuCategory[];
+  products: PublicMenuProduct[];
+}
+
+export interface PublicQrSession {
+  sessionKey: string;
+  startedAt: string;
+  lastSeenAt: string;
+  lastSubmittedAt?: string | null;
+}
+
+export interface PublicQrOrderSubmitResult {
+  requestId: string;
+  publicCode: string;
+  status: QrOrderRequestStatus;
+  createdAt: string;
+  duplicated: boolean;
+  branchId: string;
+  tableId: string;
+  tableName?: string;
+  itemCount?: number;
+  subtotalAmount?: number;
+}
+
+export interface PublicQrOrderStatusItem {
+  id: string;
+  productName: string;
+  portionLabel?: string | null;
+  imageUrl?: string | null;
+  quantity: number;
+  unitPrice: number;
+  note?: string | null;
+}
+
+export interface PublicQrLinkedOrderItem {
+  id: string;
+  productName: string;
+  quantity: number;
+  note?: string | null;
+  fulfillmentStatus: OrderItemFulfillmentStatus;
+  updatedAt: string;
+}
+
+export interface PublicQrOrderStatus {
+  id: string;
+  publicCode: string;
+  status: QrOrderRequestStatus;
+  trackingStatus: QrOrderTrackingStatus;
+  note?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+  acceptedAt?: string | null;
+  rejectedAt?: string | null;
+  subtotalAmount: number;
+  items: PublicQrOrderStatusItem[];
+  orderItems: PublicQrLinkedOrderItem[];
+}
+
+export interface PublicQrServiceRequestResult {
+  requestId: string;
+  publicCode: string;
+  status: ServiceRequestStatus;
+  createdAt: string;
+  duplicated: boolean;
+  branchId: string;
+  tableId: string;
+  tableName?: string;
+}
+
+export interface PublicQrServiceRequestStatus {
+  id: string;
+  publicCode: string;
+  status: ServiceRequestStatus;
+  note?: string | null;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface ExpenseCategory {
