@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentMethod, Prisma, TableStatus } from "@prisma/client";
+import { OrderItemFulfillmentStatus, OrderStatus, PaymentMethod, Prisma, TableStatus } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 import { applyInventoryForClosedOrderTx } from "../inventory/inventory.service.js";
 import type { AppRole } from "../auth/auth.service.js";
@@ -162,6 +162,27 @@ const parseOrderStatus = (value: unknown) => {
   return normalized as OrderStatus;
 };
 
+const parseFulfillmentStatus = (value: unknown, required = false) => {
+  if (value === undefined) {
+    if (required) {
+      throw new OrdersError(400, "fulfillmentStatus kiritilishi shart");
+    }
+
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new OrdersError(400, "fulfillmentStatus yaroqsiz");
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!Object.values(OrderItemFulfillmentStatus).includes(normalized as OrderItemFulfillmentStatus)) {
+    throw new OrdersError(400, "fulfillmentStatus yaroqsiz");
+  }
+
+  return normalized as OrderItemFulfillmentStatus;
+};
+
 const parseDateField = (value: unknown, label: "from" | "to") => {
   if (value === undefined) {
     return undefined;
@@ -244,10 +265,14 @@ const orderSelect = {
       id: true,
       orderId: true,
       productId: true,
+      requestId: true,
+      guestSessionId: true,
       productName: true,
       unitPrice: true,
       quantity: true,
       lineTotal: true,
+      source: true,
+      fulfillmentStatus: true,
       note: true,
       createdAt: true,
       updatedAt: true
@@ -737,6 +762,52 @@ export const ordersService = {
       const order = await getOrderByIdTx(tx, branchId, openOrder.id);
 
       return { order };
+    });
+  },
+
+  async updateFulfillmentStatus(params: {
+    branchId: string;
+    orderIdRaw: unknown;
+    itemIdRaw: unknown;
+    payload: unknown;
+  }) {
+    const { branchId, orderIdRaw, itemIdRaw, payload } = params;
+    await ensureActiveBranch(branchId);
+
+    if (!isObject(payload)) {
+      throw new OrdersError(400, "So'rov ma'lumoti yaroqsiz");
+    }
+
+    const orderId = parseRequiredString(orderIdRaw, "Buyurtma ID");
+    const itemId = parseRequiredString(itemIdRaw, "Item ID");
+    const fulfillmentStatus = parseFulfillmentStatus(payload.fulfillmentStatus, true)!;
+
+    return prisma.$transaction(async (tx) => {
+      const openOrder = await getOpenOrderMinimalTx(tx, branchId, orderId);
+
+      const item = await tx.orderItem.findFirst({
+        where: {
+          id: itemId,
+          orderId: openOrder.id
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!item) {
+        throw new OrdersError(404, "Buyurtma item topilmadi");
+      }
+
+      await tx.orderItem.update({
+        where: { id: item.id },
+        data: {
+          fulfillmentStatus
+        }
+      });
+
+      const order = await getOrderByIdTx(tx, branchId, openOrder.id);
+      return { order, itemId: item.id, fulfillmentStatus };
     });
   },
 

@@ -176,6 +176,9 @@ const productSelect = {
   sku: true,
   price: true,
   cost: true,
+  portionLabel: true,
+  imageUrl: true,
+  description: true,
   isActive: true,
   sortOrder: true,
   createdAt: true,
@@ -235,13 +238,16 @@ export const productsService = {
     const sku = parseNullableStringField(payload.sku, "SKU");
     const price = parseDecimalField(payload.price, "Narx", { required: true });
     const cost = parseDecimalField(payload.cost, "Tannarx", { nullable: true });
+    const portionLabel = parseNullableStringField(payload.portionLabel, "Porsiya");
+    const imageUrl = parseNullableStringField(payload.imageUrl, "Rasm URL");
+    const description = parseNullableStringField(payload.description, "Tavsif");
     const isActive = parseBooleanField(payload.isActive, "isActive");
     const sortOrder = parseIntField(payload.sortOrder, "sortOrder");
 
     await ensureCategoryInBranch(branchId, categoryId);
 
     try {
-      const product = await prisma.product.create({
+      return await prisma.product.create({
         data: {
           branchId,
           categoryId,
@@ -249,13 +255,14 @@ export const productsService = {
           sku: sku ?? null,
           price: price!,
           cost: cost ?? null,
+          portionLabel: portionLabel ?? null,
+          imageUrl: imageUrl ?? null,
+          description: description ?? null,
           ...(isActive !== undefined ? { isActive } : {}),
           ...(sortOrder !== undefined ? { sortOrder } : {})
         },
         select: productSelect
       });
-
-      return product;
     } catch (error) {
       throw mapPrismaError(error);
     }
@@ -275,7 +282,10 @@ export const productsService = {
         id: productId,
         branchId
       },
-      select: { id: true, categoryId: true }
+      select: {
+        id: true,
+        categoryId: true
+      }
     });
 
     if (!existing) {
@@ -291,30 +301,36 @@ export const productsService = {
     if (Object.prototype.hasOwnProperty.call(payload, "categoryId")) {
       const categoryId = parseRequiredString(payload.categoryId, "Kategoriya ID");
       await ensureCategoryInBranch(branchId, categoryId);
-      data.category = {
-        connect: { id: categoryId }
-      };
+      data.category = { connect: { id: categoryId } };
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, "sku")) {
       const sku = parseNullableStringField(payload.sku, "SKU");
-      if (sku !== undefined) {
-        data.sku = sku;
-      }
+      data.sku = sku;
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, "price")) {
       const price = parseDecimalField(payload.price, "Narx");
-      if (price !== undefined && price !== null) {
-        data.price = price;
+      if (!price || price === null) {
+        throw new ProductsError(400, "Narx yaroqsiz");
       }
+      data.price = price;
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, "cost")) {
-      const cost = parseDecimalField(payload.cost, "Tannarx", { nullable: true });
-      if (cost !== undefined) {
-        data.cost = cost;
-      }
+      data.cost = parseDecimalField(payload.cost, "Tannarx", { nullable: true }) ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "portionLabel")) {
+      data.portionLabel = parseNullableStringField(payload.portionLabel, "Porsiya");
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "imageUrl")) {
+      data.imageUrl = parseNullableStringField(payload.imageUrl, "Rasm URL");
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "description")) {
+      data.description = parseNullableStringField(payload.description, "Tavsif");
     }
 
     if (Object.prototype.hasOwnProperty.call(payload, "isActive")) {
@@ -336,13 +352,11 @@ export const productsService = {
     }
 
     try {
-      const product = await prisma.product.update({
+      return await prisma.product.update({
         where: { id: productId },
         data,
         select: productSelect
       });
-
-      return product;
     } catch (error) {
       throw mapPrismaError(error);
     }
@@ -364,12 +378,12 @@ export const productsService = {
       throw new ProductsError(404, "Mahsulot topilmadi");
     }
 
-    const product = await prisma.product.update({
+    return prisma.product.update({
       where: { id: productId },
-      data: { isActive: false },
+      data: {
+        isActive: false
+      },
       select: productSelect
     });
-
-    return product;
   }
 };
