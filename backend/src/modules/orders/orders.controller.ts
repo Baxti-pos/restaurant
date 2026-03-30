@@ -236,6 +236,34 @@ export const ordersController = {
     }
   },
 
+  async updateFulfillmentStatus(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
+      }
+
+      const result = await ordersService.updateFulfillmentStatus({
+        branchId: ctx.branchId,
+        orderIdRaw: req.params.orderId,
+        itemIdRaw: req.params.itemId,
+        payload: req.body
+      });
+
+      emitOrderUpdated(ctx.branchId, 'item_fulfillment_changed', result.order.id);
+      if (result.order.tableId) {
+        emitTablesUpdated(ctx.branchId, 'item_fulfillment_changed', result.order.tableId);
+      }
+
+      return res.status(200).json({
+        message: 'Item holati yangilandi',
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
   async closeOrder(req: Request, res: Response) {
     try {
       const ctx = getContext(req);

@@ -109,6 +109,9 @@ interface BackendProduct {
   categoryId: string;
   name: string;
   price: string | number;
+  portionLabel?: string | null;
+  imageUrl?: string | null;
+  description?: string | null;
   isActive: boolean;
   sortOrder?: number;
 }
@@ -516,6 +519,9 @@ const mapProduct = (product: BackendProduct): Product => ({
   categoryId: product.categoryId,
   name: product.name,
   price: toNumber(product.price),
+  portionLabel: product.portionLabel ?? null,
+  imageUrl: product.imageUrl ?? null,
+  description: product.description ?? null,
   isActive: product.isActive
 });
 

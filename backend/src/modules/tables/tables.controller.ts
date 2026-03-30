@@ -77,6 +77,23 @@ export const tablesController = {
     }
   },
 
+  async getQr(req: Request, res: Response) {
+    try {
+      const ctx = getBaseContext(req);
+      if (!ctx?.ownerScopeId) {
+        return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
+      }
+
+      const data = await tablesService.getQr(ctx.ownerScopeId, ctx.branchId, req.params.tableId);
+      return res.status(200).json({
+        message: "Stol QR ma'lumoti",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
   async create(req: Request, res: Response) {
     try {
       const ctx = getBaseContext(req);
@@ -113,6 +130,29 @@ export const tablesController = {
 
       return res.status(200).json({
         message: "Stol yangilandi",
+        data
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
+  async regenerateQr(req: Request, res: Response) {
+    try {
+      const ctx = getBaseContext(req);
+      if (!ctx?.ownerScopeId) {
+        return res.status(403).json({ message: "Ushbu amal uchun ruxsat yo'q" });
+      }
+
+      const data = await tablesService.regenerateQr(
+        ctx.ownerScopeId,
+        ctx.branchId,
+        req.params.tableId
+      );
+      emitTablesUpdated(ctx.branchId, "qr_regenerated", data.tableId);
+
+      return res.status(200).json({
+        message: "Stol QR kodi yangilandi",
         data
       });
     } catch (error) {

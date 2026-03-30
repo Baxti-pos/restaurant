@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { activeBranchMiddleware } from "../../middlewares/activeBranch.js";
-import { authMiddleware, shiftMiddleware, requireShift } from "../../middlewares/auth.js";
+import { authMiddleware, requireShift, shiftMiddleware } from "../../middlewares/auth.js";
 import { branchScopeMiddleware } from "../../middlewares/branchScope.js";
 import {
   requireManagerAnyPermissions,
@@ -18,22 +18,19 @@ ordersRouter.get(
   "/",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerAnyPermissions(["ORDERS_VIEW", "REPORTS_VIEW"]),
-  (req, res) =>
-  ordersController.list(req, res)
+  (req, res) => ordersController.list(req, res)
 );
 ordersRouter.get(
   "/open",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerAnyPermissions(["ORDERS_VIEW", "DASHBOARD_VIEW"]),
-  (req, res) =>
-  ordersController.listOpen(req, res)
+  (req, res) => ordersController.listOpen(req, res)
 );
 ordersRouter.get(
   "/:orderId",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_VIEW"]),
-  (req, res) =>
-  ordersController.getById(req, res)
+  (req, res) => ordersController.getById(req, res)
 );
 
 ordersRouter.post(
@@ -41,36 +38,37 @@ ordersRouter.post(
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),
   requireShift,
-  (req, res) =>
-  ordersController.openForTable(req, res)
+  (req, res) => ordersController.openForTable(req, res)
 );
 ordersRouter.post(
   "/:orderId/items",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),
   requireShift,
-  (req, res) =>
-  ordersController.addItem(req, res)
+  (req, res) => ordersController.addItem(req, res)
 );
-
+ordersRouter.patch(
+  "/:orderId/items/:itemId/fulfillment-status",
+  requireRoles(["OWNER", "MANAGER", "WAITER"]),
+  requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
+  (req, res) => ordersController.updateFulfillmentStatus(req, res)
+);
 ordersRouter.patch(
   "/:orderId/items/:itemId",
   requireRoles(["OWNER", "MANAGER"]),
   requirePermissions(["ORDERS_EDIT"]),
-  (req, res) =>
-  ordersController.changeItem(req, res)
+  (req, res) => ordersController.changeItem(req, res)
 );
 ordersRouter.delete(
   "/:orderId/items/:itemId",
   requireRoles(["OWNER", "MANAGER"]),
   requirePermissions(["ORDERS_EDIT"]),
-  (req, res) =>
-  ordersController.removeItem(req, res)
+  (req, res) => ordersController.removeItem(req, res)
 );
 ordersRouter.post(
   "/:orderId/close",
   requireRoles(["OWNER", "MANAGER"]),
   requirePermissions(["ORDERS_CLOSE"]),
-  (req, res) =>
-  ordersController.closeOrder(req, res)
+  (req, res) => ordersController.closeOrder(req, res)
 );

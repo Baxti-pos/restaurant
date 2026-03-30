@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { OwnerLayout } from './components/layout/OwnerLayout';
 import { ToastProvider } from './components/ui/Toast';
 import { clearAuth, getAuth, setAuth } from './lib/auth';
@@ -20,6 +20,7 @@ import { ProductsPage } from './pages/owner/ProductsPage';
 import { ProfilePage } from './pages/owner/ProfilePage';
 import { TablesPage } from './pages/owner/TablesPage';
 import { WaitersPage } from './pages/owner/WaitersPage';
+import { PublicQrMenuPage } from './pages/public/PublicQrMenuPage';
 
 const canAccessPage = (user: User | null, page: string) => {
   if (!user) return false;
@@ -71,6 +72,8 @@ function AppRoutes() {
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [appReady, setAppReady] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isPublicQrRoute = location.pathname.startsWith('/q/');
 
   const refreshBranches = async () => {
     const list = await api.branches.list();
@@ -84,6 +87,11 @@ function AppRoutes() {
 
   useEffect(() => {
     const bootstrap = async () => {
+      if (isPublicQrRoute) {
+        setAppReady(true);
+        return;
+      }
+
       const auth = getAuth();
       if (!auth.token || !auth.user) {
         setAppReady(true);
@@ -148,7 +156,7 @@ function AppRoutes() {
     };
 
     void bootstrap();
-  }, []);
+  }, [isPublicQrRoute]);
 
   const handleLogin = async (
     nextUser: User,
@@ -202,12 +210,17 @@ function AppRoutes() {
   };
 
   useEffect(() => {
+    if (isPublicQrRoute) {
+      disconnectRealtime();
+      return;
+    }
+
     if (isAuthenticated && activeBranchId) {
       connectRealtime(activeBranchId);
     } else {
       disconnectRealtime();
     }
-  }, [isAuthenticated, activeBranchId]);
+  }, [activeBranchId, isAuthenticated, isPublicQrRoute]);
 
   const handleUserChange = (nextUser: User, nextToken?: string) => {
     const auth = getAuth();
@@ -222,6 +235,15 @@ function AppRoutes() {
       branches: auth.branches ?? []
     });
   };
+
+  if (isPublicQrRoute) {
+    return (
+      <Routes>
+        <Route path='/q/:qrToken' element={<PublicQrMenuPage />} />
+        <Route path='*' element={<Navigate to='/' replace />} />
+      </Routes>
+    );
+  }
 
   if (!appReady) {
     return (

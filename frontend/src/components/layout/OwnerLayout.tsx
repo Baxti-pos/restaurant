@@ -22,6 +22,8 @@ import { clsx } from 'clsx';
 import { hasAnyPermission, hasPermission } from '../../lib/permissions';
 import { usePwaInstall } from '../../lib/pwa';
 import { toast } from '../ui/Toast';
+import { onRealtimeEvent } from '../../lib/socket';
+import { playRealtimeSound, unlockRealtimeSound } from '../../lib/realtimeSound';
 
 interface OwnerLayoutProps {
   children: React.ReactNode;
@@ -80,6 +82,42 @@ export function OwnerLayout({
     }
     document.body.classList.remove('waiter-standalone');
   }, [isStandalone, isWaiter]);
+
+  useEffect(() => {
+    const activate = () => {
+      void unlockRealtimeSound();
+    };
+
+    window.addEventListener('pointerdown', activate, { passive: true });
+    window.addEventListener('keydown', activate);
+
+    return () => {
+      window.removeEventListener('pointerdown', activate);
+      window.removeEventListener('keydown', activate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onRealtimeEvent(({ event, payload }) => {
+      if (event !== 'qr.order.created' && event !== 'service.request.created') {
+        return;
+      }
+
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'branchId' in payload &&
+        currentBranch?.id &&
+        (payload as { branchId?: string }).branchId !== currentBranch.id
+      ) {
+        return;
+      }
+
+      void playRealtimeSound(event === 'service.request.created' ? 'service-call' : 'qr-order');
+    });
+
+    return unsubscribe;
+  }, [currentBranch?.id]);
 
   const handleLogout = () => {
     onLogout();
