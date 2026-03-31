@@ -105,6 +105,14 @@ const ensureOwnedActiveBranch = async (ownerId: string, branchId: string) => {
   }
 };
 
+const tableNameCollator = new Intl.Collator("uz", {
+  numeric: true,
+  sensitivity: "base"
+});
+
+const sortTablesNaturally = <T extends { name: string }>(rows: T[]) =>
+  [...rows].sort((a, b) => tableNameCollator.compare(a.name, b.name));
+
 const mapPrismaError = (error: unknown) => {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
@@ -225,11 +233,11 @@ export const tablesService = {
 
     const rows = await prisma.table.findMany({
       where: { branchId },
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ createdAt: "asc" }],
       select: tableSelect
     });
 
-    return rows.map(serializeTable);
+    return sortTablesNaturally(rows).map(serializeTable);
   },
 
   async getById(branchId: string, tableIdRaw: unknown) {
