@@ -82,10 +82,18 @@ const mapQr = (qr: BackendTableQr): TableQrData => ({
   qrLastGeneratedAt: qr.qrLastGeneratedAt ?? null
 });
 
+const tableNameCollator = new Intl.Collator('uz', {
+  numeric: true,
+  sensitivity: 'base'
+});
+
+const sortTablesNaturally = (rows: TableItem[]) =>
+  [...rows].sort((a, b) => tableNameCollator.compare(a.name, b.name));
+
 export const tablesFeatureApi = {
   async list(): Promise<TableItem[]> {
     const rows = await authRequest<BackendTable[]>('/tables');
-    return rows.filter((table) => table.status !== 'DISABLED').map(mapTable);
+    return sortTablesNaturally(rows.filter((table) => table.status !== 'DISABLED').map(mapTable));
   },
 
   async create(payload: {
