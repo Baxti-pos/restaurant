@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -183,6 +183,8 @@ export function TablesPage({
 
   const [productSearch, setProductSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const desktopSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentType, setPaymentType] = useState<"cash" | "card" | "transfer">("cash");
@@ -356,6 +358,25 @@ export function TablesPage({
 
     return unsubscribe;
   }, [activeBranchId, activeTable?.id, orderModal?.id]);
+
+  const restoreSearchFocus = (target: "desktop" | "mobile", cursorPosition?: number) => {
+    requestAnimationFrame(() => {
+      const input = target === "desktop" ? desktopSearchInputRef.current : mobileSearchInputRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      if (typeof cursorPosition === "number") {
+        input.setSelectionRange(cursorPosition, cursorPosition);
+      }
+    });
+  };
+
+  const handleProductSearchChange =
+    (target: "desktop" | "mobile") => (event: React.ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      const cursorPosition = event.target.selectionStart ?? nextValue.length;
+      setProductSearch(nextValue);
+      restoreSearchFocus(target, cursorPosition);
+    };
 
   const openCreate = () => {
     setEditing(null);
@@ -850,7 +871,7 @@ export function TablesPage({
     }
   };
 
-  const DesktopOrderPanel = () => (
+  const renderDesktopOrderPanel = () => (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-3 flex-shrink-0">
         <GuestInboxPanel
@@ -1111,7 +1132,7 @@ export function TablesPage({
     );
   };
 
-  const DesktopProductPanel = () => {
+  const renderDesktopProductPanel = () => {
     if (!canViewProducts) {
       return (
         <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-500">
@@ -1126,10 +1147,11 @@ export function TablesPage({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              ref={desktopSearchInputRef}
               type="text"
               placeholder="Mahsulot qidirish..."
               value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
+              onChange={handleProductSearchChange("desktop")}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
@@ -1434,13 +1456,13 @@ export function TablesPage({
                     <p className="mb-3 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Buyurtma va QR inbox
                     </p>
-                    <DesktopOrderPanel />
+                    {renderDesktopOrderPanel()}
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col pl-5">
                     <p className="mb-3 flex-shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Mahsulotlar
                     </p>
-                    <DesktopProductPanel />
+                    {renderDesktopProductPanel()}
                   </div>
                 </div>
               </div>
@@ -1584,10 +1606,11 @@ export function TablesPage({
                     <>
                       <div className="mb-3">
                         <input
+                          ref={mobileSearchInputRef}
                           type="text"
                           placeholder="Mahsulot qidirish..."
                           value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
+                          onChange={handleProductSearchChange("mobile")}
                           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       </div>
