@@ -579,6 +579,281 @@ export const ordersService = {
     }
   },
 
+  async openAndCreate(params: {
+    branchId: string;
+    actor: OrderActor;
+    payload: unknown;
+  }) {
+    const { branchId, actor, payload } = params;
+    await ensureActiveBranch(branchId);
+
+    if (!isObject(payload)) {
+      throw new OrdersError(400, "So'rov ma'lumoti yaroqsiz");
+    }
+
+    const tableId = parseRequiredString(payload.tableId, "Stol ID");
+
+    const rawItems = payload.items;
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      throw new OrdersError(400, "Kamida bitta mahsulot kiritilishi shart");
+    }
+
+    const items = rawItems.map((item, i) => {
+      if (!isObject(item)) throw new OrdersError(400, `items[${i}] yaroqsiz`);
+      return {
+        productId: parseRequiredString(item.productId, `items[${i}].productId`),
+        quantity: parsePositiveInt(item.quantity, `items[${i}].quantity`),
+        note: parseOptionalString(item.note)
+      };
+    });
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const table = await tx.table.findFirst({
+          where: { id: tableId, branchId },
+          select: { id: true, name: true, status: true }
+        });
+
+        if (!table) throw new OrdersError(404, "Stol topilmadi");
+        if (table.status === TableStatus.DISABLED) {
+          throw new OrdersError(409, "Nofaol stol uchun buyurtma ochib bo'lmaydi");
+        }
+
+        const existingOpenOrder = await tx.order.findFirst({
+          where: { branchId, tableId: table.id, status: "OPEN" },
+          orderBy: { openedAt: "desc" },
+          select: { id: true, waiterId: true, shiftId: true }
+        });
+
+        let orderId: string;
+        let tableStatusChanged = false;
+        let created = false;
+
+        if (existingOpenOrder) {
+          orderId = existingOpenOrder.id;
+          if (table.status !== TableStatus.OCCUPIED) {
+            await tx.table.update({
+              where: { id: table.id },
+              data: { status: TableStatus.OCCUPIED }
+            });
+            tableStatusChanged = true;
+          }
+          if (actor.role === "WAITER" && (!existingOpenOrder.waiterId || !existingOpenOrder.shiftId)) {
+            await tx.order.update({
+              where: { id: orderId },
+              data: {
+                ...(!existingOpenOrder.waiterId ? { waiterId: actor.userId } : {}),
+                ...(!existingOpenOrder.shiftId && actor.shiftId ? { shiftId: actor.shiftId } : {})
+              }
+            });
+          }
+        } else {
+          const lastOrder = await tx.order.findFirst({
+            where: { branchId },
+            orderBy: { orderNumber: "desc" },
+            select: { orderNumber: true }
+          });
+          const nextOrderNumber = (lastOrder?.orderNumber ?? 0) + 1;
+
+          const newOrder = await tx.order.create({
+            data: {
+              branchId,
+              tableId: table.id,
+              waiterId: actor.role === "WAITER" ? actor.userId : null,
+              shiftId: actor.role === "WAITER" ? (actor.shiftId ?? null) : null,
+              orderNumber: nextOrderNumber,
+              status: "OPEN"
+            },
+            select: { id: true }
+          });
+          orderId = newOrder.id;
+          created = true;
+
+          if (table.status !== TableStatus.OCCUPIED) {
+            await tx.table.update({
+              where: { id: table.id },
+              data: { status: TableStatus.OCCUPIED }
+            });
+            tableStatusChanged = true;
+          }
+        }
+
+        const productIds = [...new Set(items.map((i) => i.productId))];
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds }, branchId, isActive: true },
+          select: { id: true, name: true, price: true }
+        });
+        const productMap = new Map(products.map((p) => [p.id, p]));
+
+        for (const item of items) {
+          if (!productMap.has(item.productId)) {
+            throw new OrdersError(404, `Mahsulot topilmadi: ${item.productId}`);
+          }
+        }
+
+        await tx.orderItem.createMany({
+          data: items.map((item) => {
+            const product = productMap.get(item.productId)!;
+            const unitPrice = product.price;
+            return {
+              orderId,
+              productId: product.id,
+              productName: product.name,
+              unitPrice,
+              quantity: item.quantity,
+              lineTotal: buildLineTotal(unitPrice, item.quantity),
+              note: item.note ?? null
+            };
+          })
+        });
+
+        await recalcOrderTotalsTx(tx, orderId);
+        const order = await getOrderByIdTx(tx, branchId, orderId);
+
+        return {
+          order,
+          table: { id: table.id, name: table.name, status: TableStatus.OCCUPIED },
+          created,
+          tableStatusChanged
+        };
+      });
+    } catch (error) {
+      throw mapPrismaError(error);
+    }
+  },
+
+  async syncItems(params: {
+    branchId: string;
+    actor: OrderActor;
+    orderIdRaw: unknown;
+    payload: unknown;
+    canEditItems: boolean;
+  }) {
+    const { branchId, actor, orderIdRaw, payload, canEditItems } = params;
+    await ensureActiveBranch(branchId);
+
+    if (!isObject(payload)) {
+      throw new OrdersError(400, "So'rov ma'lumoti yaroqsiz");
+    }
+
+    const orderId = parseRequiredString(orderIdRaw, "Buyurtma ID");
+    const rawItems = payload.items;
+    if (!Array.isArray(rawItems)) {
+      throw new OrdersError(400, "items massiv bo'lishi kerak");
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const openOrder = await getOpenOrderMinimalTx(tx, branchId, orderId);
+
+      const currentItems = await tx.orderItem.findMany({
+        where: { orderId: openOrder.id },
+        select: { id: true, productId: true, quantity: true, unitPrice: true, note: true }
+      });
+      const currentItemsMap = new Map(currentItems.map((item) => [item.id, item]));
+
+      const desiredItems = rawItems.map((item, i) => {
+        if (!isObject(item)) throw new OrdersError(400, `items[${i}] yaroqsiz`);
+        return {
+          id: typeof item.id === "string" && item.id ? item.id : null,
+          productId: typeof item.productId === "string" && item.productId ? item.productId : null,
+          quantity: parsePositiveInt(item.quantity, `items[${i}].quantity`),
+          unitPrice: item.unitPrice !== undefined
+            ? parseDecimalField(item.unitPrice, `items[${i}].unitPrice`)
+            : undefined,
+          note: parseOptionalString(item.note)
+        };
+      });
+
+      const desiredExistingIds = new Set(
+        desiredItems.filter((i) => i.id && currentItemsMap.has(i.id)).map((i) => i.id!)
+      );
+
+      // DELETE items not in desired (admin/owner only)
+      if (canEditItems) {
+        for (const currentItem of currentItems) {
+          if (!desiredExistingIds.has(currentItem.id)) {
+            await tx.orderItem.delete({ where: { id: currentItem.id } });
+          }
+        }
+      }
+
+      // UPDATE existing items
+      for (const desired of desiredItems) {
+        if (!desired.id || !currentItemsMap.has(desired.id)) continue;
+        const current = currentItemsMap.get(desired.id)!;
+        const data: Prisma.OrderItemUpdateInput = {};
+
+        if (canEditItems) {
+          const newPrice =
+            desired.unitPrice !== undefined && desired.unitPrice !== null
+              ? new Prisma.Decimal(String(desired.unitPrice))
+              : current.unitPrice;
+          if (desired.quantity !== current.quantity || !newPrice.equals(current.unitPrice)) {
+            data.quantity = desired.quantity;
+            data.unitPrice = newPrice;
+            data.lineTotal = buildLineTotal(newPrice, desired.quantity);
+          }
+        } else {
+          // Waiter: only increase quantity
+          if (desired.quantity > current.quantity) {
+            data.quantity = desired.quantity;
+            data.lineTotal = buildLineTotal(current.unitPrice, desired.quantity);
+          }
+        }
+
+        if (Object.keys(data).length > 0) {
+          await tx.orderItem.update({ where: { id: desired.id }, data });
+        }
+      }
+
+      // INSERT new items
+      const newItems = desiredItems.filter((i) => !i.id || !currentItemsMap.has(i.id));
+      if (newItems.length > 0) {
+        const productIds = [
+          ...new Set(newItems.map((i) => i.productId).filter((id): id is string => id !== null))
+        ];
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds }, branchId, isActive: true },
+          select: { id: true, name: true, price: true }
+        });
+        const productMap = new Map(products.map((p) => [p.id, p]));
+
+        await tx.orderItem.createMany({
+          data: newItems
+            .filter((item) => item.productId !== null)
+            .map((item) => {
+              const product = productMap.get(item.productId!);
+              if (!product) throw new OrdersError(404, `Mahsulot topilmadi: ${item.productId}`);
+              const unitPrice = product.price;
+              return {
+                orderId: openOrder.id,
+                productId: product.id,
+                productName: product.name,
+                unitPrice,
+                quantity: item.quantity,
+                lineTotal: buildLineTotal(unitPrice, item.quantity),
+                note: item.note ?? null
+              };
+            })
+        });
+
+        if (actor.role === "WAITER" && (!openOrder.waiterId || !openOrder.shiftId)) {
+          await tx.order.update({
+            where: { id: openOrder.id },
+            data: {
+              ...(!openOrder.waiterId ? { waiterId: actor.userId } : {}),
+              ...(!openOrder.shiftId && actor.shiftId ? { shiftId: actor.shiftId } : {})
+            }
+          });
+        }
+      }
+
+      await recalcOrderTotalsTx(tx, openOrder.id);
+      const order = await getOrderByIdTx(tx, branchId, openOrder.id);
+      return { order };
+    });
+  },
+
   async addItem(params: {
     branchId: string;
     actor: OrderActor;

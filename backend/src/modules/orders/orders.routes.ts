@@ -41,6 +41,20 @@ ordersRouter.post(
   (req, res) => ordersController.openForTable(req, res)
 );
 ordersRouter.post(
+  "/open-and-create",
+  requireRoles(["OWNER", "MANAGER", "WAITER"]),
+  requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
+  (req, res) => ordersController.openAndCreate(req, res)
+);
+ordersRouter.put(
+  "/:orderId/items",
+  requireRoles(["OWNER", "MANAGER", "WAITER"]),
+  requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
+  (req, res) => ordersController.syncItems(req, res)
+);
+ordersRouter.post(
   "/:orderId/items",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),

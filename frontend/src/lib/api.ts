@@ -1,7 +1,6 @@
 import { getAuth } from './auth';
 import { inventoryApi } from './inventoryApi';
 import { toLocalDateKey, todayStr } from './formatters';
-import { hasPermission } from './permissions';
 import {
   Branch,
   Waiter,
@@ -1121,111 +1120,38 @@ export const api = {
     },
 
     create: async (data: Omit<Order, 'id' | 'closedAt'>): Promise<Order> => {
-      const opened = await request<{
+      const result = await request<{
         order: BackendOrder;
-      }>('/orders/open-for-table', {
+      }>('/orders/open-and-create', {
         method: 'POST',
         body: JSON.stringify({
-          tableId: data.tableId
+          tableId: data.tableId,
+          items: data.items
+            .filter((item) => item.productId)
+            .map((item) => ({
+              productId: item.productId,
+              quantity: Math.max(1, Math.trunc(item.quantity || 1)),
+              note: item.note ?? null
+            }))
         })
       });
-
-      let orderId = opened.order.id;
-
-      for (const item of data.items) {
-        if (!item.productId) {
-          continue;
-        }
-
-        const quantity = Math.max(1, Math.trunc(item.quantity || 1));
-        const added = await request<{
-          order: BackendOrder;
-        }>(`/orders/${orderId}/items`, {
-          method: 'POST',
-          body: JSON.stringify({
-            productId: item.productId,
-            quantity
-          })
-        });
-
-        orderId = added.order.id;
-      }
-
-      const finalOrder = await request<BackendOrder>(`/orders/${orderId}`);
-      return mapOrder(finalOrder);
+      return mapOrder(result.order);
     },
 
     updateItems: async (id: string, items: OrderItem[]): Promise<Order> => {
-      const currentOrder = await request<BackendOrder>(`/orders/${id}`);
-      const authUser = getAuth().user;
-      const canEditItems = hasPermission(authUser, 'ORDERS_EDIT');
-
-      const currentItemsMap = new Map(currentOrder.items.map((item) => [item.id, item]));
-      const nextItemsMap = new Map(
-        items.
-        filter((item) => currentItemsMap.has(item.id)).
-        map((item) => [item.id, item] as const)
-      );
-
-      for (const currentItem of currentOrder.items) {
-        if (!nextItemsMap.has(currentItem.id) && canEditItems) {
-          await request<{ order: BackendOrder }>(`/orders/${id}/items/${currentItem.id}`, {
-            method: 'DELETE'
-          });
-        }
-      }
-
-      for (const [itemId, nextItem] of nextItemsMap.entries()) {
-        const currentItem = currentItemsMap.get(itemId);
-        if (!currentItem) {
-          continue;
-        }
-
-        const currentQty = currentItem.quantity;
-        const nextQty = Math.max(1, Math.trunc(nextItem.quantity || 1));
-        const currentPrice = toNumber(currentItem.unitPrice);
-        const nextPrice = toNumber(nextItem.price);
-
-        if (!canEditItems && nextQty > currentQty && currentItem.productId) {
-          await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
-            method: 'POST',
-            body: JSON.stringify({
-              productId: currentItem.productId,
-              quantity: nextQty - currentQty
-            })
-          });
-          continue;
-        }
-
-        if (canEditItems && (currentQty !== nextQty || Math.abs(currentPrice - nextPrice) > 0.0001)) {
-          await request<{ order: BackendOrder }>(`/orders/${id}/items/${itemId}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              quantity: nextQty,
-              unitPrice: nextPrice
-            })
-          });
-        }
-      }
-
-      const newItems = items.filter((item) => !currentItemsMap.has(item.id));
-      for (const item of newItems) {
-        if (!item.productId) {
-          continue;
-        }
-
-        const quantity = Math.max(1, Math.trunc(item.quantity || 1));
-        await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
-          method: 'POST',
-          body: JSON.stringify({
-            productId: item.productId,
-            quantity
-          })
-        });
-      }
-
-      const finalOrder = await request<BackendOrder>(`/orders/${id}`);
-      return mapOrder(finalOrder);
+      const result = await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            id: item.id,
+            productId: item.productId ?? null,
+            quantity: Math.max(1, Math.trunc(item.quantity || 1)),
+            unitPrice: item.price,
+            note: item.note ?? null
+          }))
+        })
+      });
+      return mapOrder(result.order);
     },
 
     close: async (

@@ -232,17 +232,11 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
   };
   useEffect(() => {
     fetchData();
-    const interval = window.setInterval(fetchData, 10000);
-    return () => window.clearInterval(interval);
   }, [activeBranchId, rangeMode, customFrom, customTo]);
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed"
-      ) {
+      if (event !== "order.closed") {
         return;
       }
 
@@ -665,11 +659,7 @@ function WaiterEarningsTab({
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed"
-      ) {
+      if (event !== "order.closed") {
         return;
       }
 
@@ -803,11 +793,7 @@ function DailyTab({ activeBranchId }: { activeBranchId: string }) {
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed"
-      ) {
+      if (event !== "order.closed") {
         return;
       }
 
@@ -938,11 +924,7 @@ function MonthlyTab({ activeBranchId }: { activeBranchId: string }) {
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed"
-      ) {
+      if (event !== "order.closed") {
         return;
       }
 
@@ -1123,11 +1105,7 @@ function WaitersTab({ activeBranchId }: { activeBranchId: string }) {
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed"
-      ) {
+      if (event !== "order.closed") {
         return;
       }
 
