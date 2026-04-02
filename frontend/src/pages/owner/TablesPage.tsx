@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Badge } from "../../components/ui/Badge";
@@ -50,6 +51,7 @@ import { GuestInboxPanel } from "../../components/tables/GuestInboxPanel";
 interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
+  activeBranchCommissionPercent: number;
 }
 
 const getErrorMessage = (error: unknown) =>
@@ -129,7 +131,11 @@ function ToggleRow({
   );
 }
 
-export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps) {
+export function TablesPage({
+  activeBranchId,
+  activeBranchName,
+  activeBranchCommissionPercent,
+}: TablesPageProps) {
   const auth = getAuth();
   const user = auth.user;
   const isWaiter = user?.role === "waiter";
@@ -278,6 +284,12 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
 
     try {
       const order = await ordersFeatureApi.getById(orderId);
+
+      if (order.status !== "open") {
+        closeOrderSheet();
+        return;
+      }
+
       setOrderModal(order);
     } catch {
       // Order yopilgan yoki o'zgargan bo'lishi mumkin.
@@ -495,6 +507,10 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       waiterName: user?.name ?? roleLabel,
       status: "open",
       items: [],
+      subtotal: 0,
+      discount: 0,
+      commissionPercent: activeBranchCommissionPercent,
+      commission: 0,
       total: 0,
       createdAt: new Date().toISOString()
     });
@@ -513,6 +529,10 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
         waiterName: orderModal.waiterName,
         status: "open",
         items: orderModal.items,
+        subtotal: orderModal.subtotal,
+        discount: orderModal.discount,
+        commissionPercent: orderModal.commissionPercent,
+        commission: orderModal.commission,
         total: orderModal.total,
         createdAt: orderModal.createdAt
       });
@@ -531,9 +551,21 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
 
     setClosing(true);
     try {
-      const updated = await api.orders.updateItems(orderModal.id, orderModal.items);
+      const result = await api.orders.updateItems(orderModal.id, orderModal.items);
+
+      if (result.deleted) {
+        toast.success("Buyurtma bo'sh qolgani uchun bekor qilindi");
+        await loadTables();
+        closeOrderSheet();
+        return;
+      }
+
+      if (!result.order || !result.tableId) {
+        throw new Error("Buyurtma ma'lumoti yangilanmadi");
+      }
+
       toast.success("Buyurtma saqlandi");
-      await Promise.all([loadTables(), loadGuestInbox(updated.tableId)]);
+      await Promise.all([loadTables(), loadGuestInbox(result.tableId)]);
       closeOrderSheet();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
@@ -542,8 +574,18 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     }
   };
 
-  const recalcTotal = (items: Order["items"]) =>
-    items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const recalcOrderSummary = (items: Order["items"]) => {
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discount = orderModal?.discount ?? 0;
+    const commissionPercent = orderModal?.commissionPercent ?? 0;
+    const commission = Math.round((subtotal * commissionPercent) / 100);
+
+    return {
+      subtotal,
+      commission,
+      total: subtotal - discount + commission
+    };
+  };
 
   const handleIncreaseItem = (itemId: string) => {
     if (!orderModal || !canSubmitOrderChanges) return;
@@ -560,7 +602,7 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setOrderModal({
       ...orderModal,
       items,
-      total: recalcTotal(items)
+      ...recalcOrderSummary(items)
     });
   };
 
@@ -587,7 +629,7 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setOrderModal({
       ...orderModal,
       items,
-      total: recalcTotal(items)
+      ...recalcOrderSummary(items)
     });
   };
 
@@ -603,7 +645,7 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setOrderModal({
       ...orderModal,
       items,
-      total: recalcTotal(items)
+      ...recalcOrderSummary(items)
     });
     setDeleteItemConfirm({ open: false, itemId: null });
   };
@@ -617,7 +659,6 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
 
     if (existing) {
       handleIncreaseItem(existing.id);
-      setMobileTab("order");
       return;
     }
 
@@ -634,9 +675,8 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setOrderModal({
       ...orderModal,
       items,
-      total: recalcTotal(items)
+      ...recalcOrderSummary(items)
     });
-    setMobileTab("order");
   };
 
   const handleAcceptOrder = async (requestId: string) => {
@@ -738,6 +778,7 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
 
     try {
       await api.orders.close(closedOrder.id, paymentType, closedOrder.total);
+      closeOrderSheet();
       toast.success("Buyurtma yopildi");
 
       try {
@@ -756,7 +797,6 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       }
 
       await loadTables();
-      closeOrderSheet();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -928,11 +968,37 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       </div>
 
       <div className="mt-3 flex-shrink-0 space-y-2.5 border-t border-slate-200 pt-3">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-600">Jami summa:</span>
-          <span className="text-lg font-bold tabular-nums text-indigo-600">
-            {formatCurrency(orderModal?.total ?? 0)}
-          </span>
+        <div className="space-y-1 mb-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-500">Mahsulotlar:</span>
+            <span className="text-sm tabular-nums text-slate-700">
+              {formatCurrency(orderModal?.subtotal ?? 0)}
+            </span>
+          </div>
+          {(orderModal?.discount ?? 0) > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Chegirma:</span>
+              <span className="text-sm tabular-nums text-emerald-600">
+                -{formatCurrency(orderModal?.discount ?? 0)}
+              </span>
+            </div>
+          )}
+          {(orderModal?.commission ?? 0) > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">
+                Xizmat ({orderModal?.commissionPercent ?? 0}%):
+              </span>
+              <span className="text-sm tabular-nums text-amber-600">
+                +{formatCurrency(orderModal?.commission ?? 0)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between border-t border-slate-100 pt-1">
+            <span className="text-sm font-semibold text-slate-600">Jami summa:</span>
+            <span className="text-lg font-bold tabular-nums text-indigo-600">
+              {formatCurrency(orderModal?.total ?? 0)}
+            </span>
+          </div>
         </div>
 
         {orderModal?.id ? (
@@ -978,6 +1044,72 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       </div>
     </div>
   );
+
+  const renderTableModalActions = (compact = false) => {
+    if (!canManageTables || !activeTable) {
+      return null;
+    }
+
+    const baseButtonClass = compact
+      ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:text-indigo-600 disabled:opacity-40"
+      : "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:text-indigo-600 disabled:opacity-40";
+
+    const dangerButtonClass = compact
+      ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-400 transition-colors hover:bg-red-50"
+      : "inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50";
+
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => openEdit(activeTable)}
+          title="Tahrirlash"
+          className={baseButtonClass}
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+          {!compact && <span>Tahrirlash</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => showQr(activeTable.id)}
+          title="QR ko'rish"
+          className={baseButtonClass}
+        >
+          <QrCode className="h-3.5 w-3.5" />
+          {!compact && <span>QR ko'rish</span>}
+        </button>
+        <button
+          type="button"
+          disabled={qrBusyTableId === activeTable.id}
+          onClick={() => handlePrintQr(activeTable.id)}
+          title="Chop etish"
+          className={baseButtonClass}
+        >
+          <Printer className="h-3.5 w-3.5" />
+          {!compact && <span>Chop etish</span>}
+        </button>
+        <button
+          type="button"
+          disabled={qrBusyTableId === activeTable.id}
+          onClick={() => handleRegenerateQr(activeTable.id)}
+          title="Yangi QR"
+          className={baseButtonClass}
+        >
+          <RefreshCcw className="h-3.5 w-3.5" />
+          {!compact && <span>Yangi QR</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDeleteTarget(activeTable)}
+          title="O'chirish"
+          className={dangerButtonClass}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          {!compact && <span>O'chirish</span>}
+        </button>
+      </div>
+    );
+  };
 
   const DesktopProductPanel = () => {
     if (!canViewProducts) {
@@ -1117,7 +1249,7 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {tables.map((table) => {
             const cfg = statusConfig[table.status] ?? statusConfig.empty;
             const hasSignals =
@@ -1149,107 +1281,48 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
                   </Badge>
                 </div>
 
-                <div className="space-y-2 text-sm text-slate-600">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>QR holati</span>
-                    <span className="font-medium text-slate-900">
-                      {table.qrEnabled ? "Faol" : "O'chirilgan"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Self-order</span>
-                    <span className="font-medium text-slate-900">
-                      {table.selfOrderEnabled ? "Yoqilgan" : "O'chirilgan"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Oxirgi scan</span>
-                    <span className="text-right text-xs font-medium text-slate-900">
-                      {formatActivityTime(table.qrLastScannedAt)}
-                    </span>
-                  </div>
-                </div>
+                {/* Order info */}
+                {table.status === 'occupied' ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Mahsulotlar</span>
+                      <span className="font-semibold text-slate-900">{table.currentOrderItemCount ?? 0} ta</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Jami</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(table.currentOrderTotal ?? 0)}</span>
+                    </div>
+                    {table.currentOrderWaiterName && (
+                      <div className="text-xs text-slate-400">
+                        Girgitton: <span className="font-medium text-slate-600">{table.currentOrderWaiterName}</span>
+                      </div>
+                    )}
+                    {/* Signal badges */}
+                    {hasSignals && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {(table.pendingQrOrdersCount ?? 0) > 0 && (
+                          <Badge variant="warning" size="sm">QR: {table.pendingQrOrdersCount}</Badge>
+                        )}
+                        {(table.activeServiceRequestsCount ?? 0) > 0 && (
+                          <Badge variant="warning" size="sm">
+                            <BellRing className="mr-1 h-3 w-3" />
+                            {table.activeServiceRequestsCount}
+                          </Badge>
+                        )}
+                        {(table.readyItemsCount ?? 0) > 0 && (
+                          <Badge variant="success" size="sm">
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            Tayyor: {table.readyItemsCount}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
 
-                {table.currentOrderWaiterName && (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600">
-                    Girgitton: <span className="font-semibold text-slate-900">{table.currentOrderWaiterName}</span>
                   </div>
+                ) : (
+                  <p className="text-sm text-slate-400">Bo'sh stol</p>
                 )}
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {(table.qrEnabled ?? true) && (
-                    <Badge variant="secondary" size="sm">
-                      QR tayyor
-                    </Badge>
-                  )}
-                  {(table.pendingQrOrdersCount ?? 0) > 0 && (
-                    <Badge variant="warning" size="sm">
-                      QR buyurtma: {table.pendingQrOrdersCount}
-                    </Badge>
-                  )}
-                  {(table.activeServiceRequestsCount ?? 0) > 0 && (
-                    <Badge variant="warning" size="sm">
-                      <BellRing className="mr-1 h-3 w-3" />
-                      Chaqiruv: {table.activeServiceRequestsCount}
-                    </Badge>
-                  )}
-                  {(table.readyItemsCount ?? 0) > 0 && (
-                    <Badge variant="success" size="sm">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Tayyor: {table.readyItemsCount}
-                    </Badge>
-                  )}
-                </div>
-
-                {canManageTables && (
-                  <div
-                    className="mt-4 flex flex-wrap gap-2 border-t border-slate-200/80 pt-4"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => openEdit(table)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:text-indigo-600"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                      Tahrirlash
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void showQr(table.id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:text-indigo-600"
-                    >
-                      <QrCode className="h-3.5 w-3.5" />
-                      QR ko'rish
-                    </button>
-                    <button
-                      type="button"
-                      disabled={qrBusyTableId === table.id}
-                      onClick={() => void handlePrintQr(table.id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:text-indigo-600 disabled:opacity-60"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      Chop etish
-                    </button>
-                    <button
-                      type="button"
-                      disabled={qrBusyTableId === table.id}
-                      onClick={() => void handleRegenerateQr(table.id)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-600 transition-colors hover:text-indigo-600 disabled:opacity-60"
-                    >
-                      <RefreshCcw className="h-3.5 w-3.5" />
-                      Yangi QR
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(table)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      O'chirish
-                    </button>
-                  </div>
-                )}
 
                 {hasSignals && (
                   <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-indigo-300/40" />
@@ -1330,14 +1403,14 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
         </form>
       </Modal>
 
-      {orderModal && (
+      {orderModal && createPortal(
         <>
           <div className="hidden lg:block">
             <Modal
               isOpen={!!orderModal}
               onClose={closeOrderSheet}
               title={
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-slate-900">Stol: {orderModal.tableName}</span>
                   <span
                     className={clsx(
@@ -1349,9 +1422,11 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
                   >
                     {roleLabel}
                   </span>
+                  {renderTableModalActions(false)}
                 </div>
               }
               size="xl"
+              zIndexClass="z-[60]"
             >
               <div className="flex max-h-[680px] h-[calc(90vh-120px)] flex-col">
                 <div className="flex min-h-0 flex-1 gap-0">
@@ -1373,12 +1448,15 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
           </div>
 
           <div className="fixed inset-0 z-[60] flex flex-col bg-slate-50 lg:hidden">
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-slate-900">Stol: {orderModal.tableName}</span>
-                <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                  {roleLabel}
-                </span>
+            <div className="flex flex-shrink-0 items-start justify-between border-b border-slate-200 bg-white px-4 py-3">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-bold text-slate-900">Stol: {orderModal.tableName}</span>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                    {roleLabel}
+                  </span>
+                </div>
+                {renderTableModalActions(true)}
               </div>
               <button onClick={closeOrderSheet} className="-mr-2 p-2 text-slate-400 hover:text-slate-600">
                 <X className="h-6 w-6" />
@@ -1591,11 +1669,27 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
             </div>
 
             <div className="mb-[10px] mt-[10px] flex-shrink-0 border-t border-slate-200 bg-white p-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-500">Jami summa</span>
-                <span className="text-xl font-bold text-indigo-600">
-                  {formatCurrency(orderModal.total)}
-                </span>
+              <div className="mb-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Mahsulotlar:</span>
+                  <span className="text-sm tabular-nums text-slate-700">{formatCurrency(orderModal.subtotal ?? 0)}</span>
+                </div>
+                {(orderModal.discount ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Chegirma:</span>
+                    <span className="text-sm tabular-nums text-emerald-600">-{formatCurrency(orderModal.discount ?? 0)}</span>
+                  </div>
+                )}
+                {(orderModal.commission ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Xizmat ({orderModal.commissionPercent ?? 0}%):</span>
+                    <span className="text-sm tabular-nums text-amber-600">+{formatCurrency(orderModal.commission ?? 0)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-slate-100 pt-1">
+                  <span className="text-sm font-medium text-slate-500">Jami summa</span>
+                  <span className="text-xl font-bold text-indigo-600">{formatCurrency(orderModal.total)}</span>
+                </div>
               </div>
               {orderModal.id ? (
                 <div className="flex gap-3">
@@ -1640,7 +1734,8 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       <Modal

@@ -23,7 +23,8 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
     name: '',
     address: '',
     shiftStart: '08:00',
-    shiftEnd: '22:00'
+    shiftEnd: '22:00',
+    commissionPercent: '0'
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => {
@@ -42,7 +43,8 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       name: '',
       address: '',
       shiftStart: '08:00',
-      shiftEnd: '22:00'
+      shiftEnd: '22:00',
+      commissionPercent: '0'
     });
     setErrors({});
     setModalOpen(true);
@@ -53,7 +55,8 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       name: b.name,
       address: b.address,
       shiftStart: b.shiftStart,
-      shiftEnd: b.shiftEnd
+      shiftEnd: b.shiftEnd,
+      commissionPercent: String(b.commissionPercent ?? 0)
     });
     setErrors({});
     setModalOpen(true);
@@ -73,12 +76,14 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       if (editing) {
         await api.branches.update(editing.id, {
           ...form,
+          commissionPercent: Number(form.commissionPercent),
           timezone: 'Asia/Tashkent'
         });
         toast.success('Filial yangilandi');
       } else {
         await api.branches.create({
           ...form,
+          commissionPercent: Number(form.commissionPercent),
           timezone: 'Asia/Tashkent',
           isActive: true
         });
@@ -189,6 +194,12 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                       {b.shiftStart} – {b.shiftEnd}
                     </span>
                   </div>
+                  {(b.commissionPercent ?? 0) > 0 && (
+                    <div className="flex items-center space-x-2 text-sm text-slate-600">
+                      <span className="h-4 w-4 flex items-center justify-center text-slate-400 text-xs font-bold">%</span>
+                      <span>Xizmat foizi: {b.commissionPercent}%</span>
+                    </div>
+                  )}
                   <div className="pt-1">
                     <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${b.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -215,6 +226,9 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Smena vaqti
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                      Xizmat foizi
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                       Holat
@@ -262,6 +276,13 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
                             {b.shiftStart} – {b.shiftEnd}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {(b.commissionPercent ?? 0) > 0 ? (
+                          <span className="font-medium text-slate-800">{b.commissionPercent}%</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-4 text-left">
                         <span
@@ -351,6 +372,21 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
               } />
 
           </div>
+          <Input
+            label="Xizmat foizi (%)"
+            type="number"
+            placeholder="0"
+            min="0"
+            max="100"
+            step="0.01"
+            value={form.commissionPercent}
+            onChange={(e) =>
+            setForm({
+              ...form,
+              commissionPercent: e.target.value
+            })
+            } />
+
           <div className="flex space-x-3 pt-2">
             <Button
               type="button"

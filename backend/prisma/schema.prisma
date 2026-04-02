@@ -128,6 +128,7 @@ model Branch {
   name               String              @unique
   address            String?
   shiftEnd           String?
+  commissionPercent  Decimal             @default(0) @db.Decimal(5, 2)
   isActive           Boolean             @default(true)
   ownerId            String
   owner              User                @relation("BranchOwner", fields: [ownerId], references: [id], onDelete: Restrict)
@@ -247,6 +248,8 @@ model Order {
   status            OrderStatus      @default(OPEN)
   subtotalAmount    Decimal          @default(0) @db.Decimal(12, 2)
   discountAmount    Decimal          @default(0) @db.Decimal(12, 2)
+  commissionPercent Decimal          @default(0) @db.Decimal(5, 2)
+  commissionAmount  Decimal          @default(0) @db.Decimal(12, 2)
   totalAmount       Decimal          @default(0) @db.Decimal(12, 2)
   paidAmount        Decimal          @default(0) @db.Decimal(12, 2)
   costAmount        Decimal          @default(0) @db.Decimal(12, 2)

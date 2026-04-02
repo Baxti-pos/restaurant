@@ -159,11 +159,9 @@ const tableSelect = {
         }
       },
       items: {
-        where: {
-          fulfillmentStatus: "READY"
-        },
         select: {
-          id: true
+          quantity: true,
+          fulfillmentStatus: true
         }
       }
     }
@@ -188,13 +186,22 @@ const tableSelect = {
 
 type TableRow = Prisma.TableGetPayload<{ select: typeof tableSelect }>;
 
-const serializeTable = (table: TableRow) => ({
-  ...table,
-  qrPublicUrl: buildPublicQrUrl(table.qrPublicToken),
-  pendingQrOrdersCount: table._count.qrOrderRequests,
-  activeServiceRequestsCount: table._count.serviceRequests,
-  readyItemsCount: table.orders[0]?.items.length ?? 0
-});
+const serializeTable = (table: TableRow) => {
+  const currentOrderItems = table.orders[0]?.items ?? [];
+
+  return {
+    ...table,
+    qrPublicUrl: buildPublicQrUrl(table.qrPublicToken),
+    pendingQrOrdersCount: table._count.qrOrderRequests,
+    activeServiceRequestsCount: table._count.serviceRequests,
+    readyItemsCount: currentOrderItems.reduce(
+      (sum, item) => sum + (item.fulfillmentStatus === "READY" ? item.quantity : 0),
+      0
+    ),
+    currentOrderTotal: table.orders[0]?.totalAmount ?? null,
+    currentOrderItemCount: currentOrderItems.reduce((sum, item) => sum + item.quantity, 0)
+  };
+};
 
 const buildQrPayload = async (table: {
   id: string;

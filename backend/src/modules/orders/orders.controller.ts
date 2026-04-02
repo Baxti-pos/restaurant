@@ -210,9 +210,26 @@ export const ordersController = {
         canEditItems
       });
 
-      emitOrderUpdated(ctx.branchId, 'items_synced', result.order.id);
-      if (result.order.tableId) {
-        emitTablesUpdated(ctx.branchId, 'items_synced', result.order.tableId);
+      if (result.deleted) {
+        emitOrderUpdated(ctx.branchId, 'deleted_empty', result.orderId);
+        if (result.table?.id) {
+          emitTablesUpdated(ctx.branchId, 'available', result.table.id);
+        }
+
+        return res.status(200).json({
+          message: "Buyurtma bo'sh qolgani uchun bekor qilindi",
+          data: result
+        });
+      }
+
+      if (!result.order) {
+        throw new OrdersError(500, "Buyurtma ma'lumoti topilmadi");
+      }
+
+      const order = result.order;
+      emitOrderUpdated(ctx.branchId, 'items_synced', order.id);
+      if (order.tableId) {
+        emitTablesUpdated(ctx.branchId, 'items_synced', order.tableId);
       }
 
       return res.status(200).json({

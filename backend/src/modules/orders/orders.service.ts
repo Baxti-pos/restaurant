@@ -238,6 +238,8 @@ const orderSelect = {
   status: true,
   subtotalAmount: true,
   discountAmount: true,
+  commissionPercent: true,
+  commissionAmount: true,
   totalAmount: true,
   paidAmount: true,
   paymentMethod: true,
@@ -329,6 +331,7 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
     where: { id: orderId },
     select: {
       id: true,
+      branchId: true,
       discountAmount: true
     }
   });
@@ -346,18 +349,33 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
 
   const subtotal = aggregated._sum.lineTotal ?? zeroDecimal();
   const discount = order.discountAmount ?? zeroDecimal();
-  const total = clampMinZero(subtotal.minus(discount));
+
+  let commissionPercent = zeroDecimal();
+  const branch = await tx.branch.findUnique({
+    where: { id: order.branchId },
+    select: { commissionPercent: true }
+  });
+  if (branch) {
+    commissionPercent = branch.commissionPercent ?? zeroDecimal();
+  }
+
+  const commissionAmount = subtotal.mul(commissionPercent).div(100).toDecimalPlaces(2);
+  const total = clampMinZero(subtotal.minus(discount).plus(commissionAmount));
 
   return tx.order.update({
     where: { id: orderId },
     data: {
       subtotalAmount: subtotal,
+      commissionPercent,
+      commissionAmount,
       totalAmount: total
     },
     select: {
       id: true,
       subtotalAmount: true,
       discountAmount: true,
+      commissionPercent: true,
+      commissionAmount: true,
       totalAmount: true
     }
   });
@@ -848,9 +866,75 @@ export const ordersService = {
         }
       }
 
+      const remainingItemsCount = await tx.orderItem.count({
+        where: { orderId: openOrder.id }
+      });
+
+      if (remainingItemsCount === 0) {
+        await tx.order.delete({
+          where: { id: openOrder.id }
+        });
+
+        let tableStatusChanged = false;
+        let table: { id: string; name: string; status: TableStatus } | null = null;
+
+        if (openOrder.tableId) {
+          const remainingOpenOrders = await tx.order.count({
+            where: {
+              tableId: openOrder.tableId,
+              status: "OPEN"
+            }
+          });
+
+          const existingTable = await tx.table.findUnique({
+            where: { id: openOrder.tableId },
+            select: {
+              id: true,
+              name: true,
+              status: true
+            }
+          });
+
+          if (existingTable) {
+            if (
+              remainingOpenOrders === 0 &&
+              existingTable.status !== TableStatus.DISABLED &&
+              existingTable.status !== TableStatus.AVAILABLE
+            ) {
+              table = await tx.table.update({
+                where: { id: existingTable.id },
+                data: { status: TableStatus.AVAILABLE },
+                select: {
+                  id: true,
+                  name: true,
+                  status: true
+                }
+              });
+              tableStatusChanged = true;
+            } else {
+              table = existingTable;
+            }
+          }
+        }
+
+        return {
+          order: null,
+          deleted: true,
+          orderId: openOrder.id,
+          table,
+          tableStatusChanged
+        };
+      }
+
       await recalcOrderTotalsTx(tx, openOrder.id);
       const order = await getOrderByIdTx(tx, branchId, openOrder.id);
-      return { order };
+      return {
+        order,
+        deleted: false,
+        orderId: openOrder.id,
+        table: null,
+        tableStatusChanged: false
+      };
     });
   },
 
@@ -1110,12 +1194,13 @@ export const ordersService = {
       const totals = await recalcOrderTotalsTx(tx, openOrder.id);
 
       const subtotal = totals.subtotalAmount ?? zeroDecimal();
+      const commissionAmount = totals.commissionAmount ?? zeroDecimal();
       const currentDiscount = totals.discountAmount ?? zeroDecimal();
       const finalDiscount =
         discountAmount === undefined || discountAmount === null
           ? currentDiscount
           : discountAmount;
-      const finalTotal = clampMinZero(subtotal.minus(finalDiscount));
+      const finalTotal = clampMinZero(subtotal.minus(finalDiscount).plus(commissionAmount));
       const finalPaid =
         paidAmount === undefined || paidAmount === null ? finalTotal : paidAmount;
       const inventoryResult = await applyInventoryForClosedOrderTx(tx, {

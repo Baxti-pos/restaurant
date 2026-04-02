@@ -187,6 +187,8 @@ interface DayGroup {
   dateKey: string;
   orders: Order[];
   totalQty: number;
+  totalSubtotal: number;
+  totalCommission: number;
   totalRevenue: number;
 }
 function SalesTab({ activeBranchId }: { activeBranchId: string }) {
@@ -264,11 +266,15 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
         (s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0),
         0,
       );
-      const totalRevenue = dayOrders.reduce((s, o) => s + o.total, 0);
+      const totalSubtotal = dayOrders.reduce((s, o) => s + (o.subtotal ?? o.total), 0);
+      const totalCommission = dayOrders.reduce((s, o) => s + (o.commission ?? 0), 0);
+      const totalRevenue = totalSubtotal + totalCommission;
       groups.push({
         dateKey,
         orders: dayOrders,
         totalQty,
+        totalSubtotal,
+        totalCommission,
         totalRevenue,
       });
     }
@@ -276,6 +282,8 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
   }, [orders]);
   // Summary totals
   const totalQty = dayGroups.reduce((s, g) => s + g.totalQty, 0);
+  const totalSubtotal = dayGroups.reduce((s, g) => s + g.totalSubtotal, 0);
+  const totalCommission = dayGroups.reduce((s, g) => s + g.totalCommission, 0);
   const totalRevenue = dayGroups.reduce((s, g) => s + g.totalRevenue, 0);
   const totalClosedOrders = orders.filter((o) => o.status === "closed").length;
   const avgCheck =
@@ -389,24 +397,24 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
           />
 
           <StatCard
-            title="Umumiy tushum"
-            value={formatCurrency(totalRevenue)}
+            title="Mahsulotlar tushumi"
+            value={formatCurrency(totalSubtotal)}
             icon={TrendingUp}
             color="green"
           />
 
           <StatCard
-            title="Yopilgan buyurtmalar"
-            value={`${totalClosedOrders} ta`}
-            icon={CheckCircle}
+            title="Xizmat haqi jami"
+            value={formatCurrency(totalCommission)}
+            icon={Receipt}
             color="amber"
           />
 
           <StatCard
-            title="O'rtacha chek"
-            value={formatCurrency(avgCheck)}
-            icon={Receipt}
-            color="red"
+            title="Umumiy tushum"
+            value={formatCurrency(totalRevenue)}
+            icon={CheckCircle}
+            color="indigo"
           />
         </div>
       )}
@@ -475,11 +483,21 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-3 pt-2 border-t border-slate-200 text-right">
-                        <p className="text-sm font-semibold text-indigo-700">
-                          Kun bo'yicha jami:{" "}
-                          {formatCurrency(group.totalRevenue)}
-                        </p>
+                      <div className="mt-3 pt-2 border-t border-slate-200 space-y-1">
+                        <div className="flex justify-between text-sm text-slate-600">
+                          <span>Mahsulotlar:</span>
+                          <span>{formatCurrency(group.totalSubtotal)}</span>
+                        </div>
+                        {group.totalCommission > 0 && (
+                          <div className="flex justify-between text-sm text-amber-700">
+                            <span>Xizmat haqi:</span>
+                            <span>+{formatCurrency(group.totalCommission)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm font-semibold text-indigo-700 pt-1 border-t border-slate-200">
+                          <span>Jami:</span>
+                          <span>{formatCurrency(group.totalRevenue)}</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -573,15 +591,29 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
                                     ))}
                                   </tbody>
                                 </table>
-                                <div className="mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:justify-end gap-1 text-sm text-slate-600">
-                                  <span className="sm:mr-6">
-                                    Kun bo'yicha sotilgan:{" "}
+                                <div className="mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2 text-sm text-slate-600">
+                                  <span className="sm:mr-auto">
+                                    Sotilgan:{" "}
                                     <span className="font-semibold text-slate-800">
                                       {group.totalQty} ta
                                     </span>
                                   </span>
                                   <span>
-                                    Kun bo'yicha jami:{" "}
+                                    Mahsulotlar:{" "}
+                                    <span className="font-semibold text-slate-800">
+                                      {formatCurrency(group.totalSubtotal)}
+                                    </span>
+                                  </span>
+                                  {group.totalCommission > 0 && (
+                                    <span>
+                                      Xizmat haqi:{" "}
+                                      <span className="font-semibold text-amber-700">
+                                        +{formatCurrency(group.totalCommission)}
+                                      </span>
+                                    </span>
+                                  )}
+                                  <span>
+                                    Jami:{" "}
                                     <span className="font-semibold text-indigo-700">
                                       {formatCurrency(group.totalRevenue)}
                                     </span>

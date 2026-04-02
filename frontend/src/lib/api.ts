@@ -36,6 +36,7 @@ interface BackendBranch {
   name: string;
   address: string | null;
   shiftEnd?: string | null;
+  commissionPercent?: string | number | null;
   isActive: boolean;
 }
 
@@ -148,6 +149,10 @@ interface BackendOrder {
   tableId: string | null;
   waiterId: string | null;
   status: BackendOrderStatus;
+  subtotalAmount: string | number;
+  discountAmount: string | number;
+  commissionPercent: string | number;
+  commissionAmount: string | number;
   totalAmount: string | number;
   paymentMethod: BackendPaymentMethod | null;
   openedAt: string;
@@ -449,6 +454,7 @@ const mapBranch = (branch: BackendBranch): Branch => ({
   shiftStart: DEFAULT_SHIFT_START,
   shiftEnd: branch.shiftEnd ?? DEFAULT_SHIFT_END,
   timezone: 'Asia/Tashkent',
+  commissionPercent: toNumber(branch.commissionPercent ?? 0),
   isActive: branch.isActive
 });
 
@@ -576,6 +582,10 @@ const mapOrder = (order: BackendOrder): Order => ({
   waiterName: order.waiter?.fullName ?? 'Noma\'lum',
   status: order.status === 'CLOSED' ? 'closed' : 'open',
   items: order.items.map(mapOrderItem),
+  subtotal: toNumber(order.subtotalAmount),
+  discount: toNumber(order.discountAmount),
+  commissionPercent: toNumber(order.commissionPercent),
+  commission: toNumber(order.commissionAmount),
   total: toNumber(order.totalAmount),
   paymentType: mapPaymentType(order.paymentMethod),
   createdAt: order.openedAt,
@@ -708,7 +718,8 @@ export const api = {
           name: data.name,
           address: data.address,
           shiftEnd: data.shiftEnd,
-          isActive: data.isActive
+          isActive: data.isActive,
+          commissionPercent: data.commissionPercent ?? 0
         })
       });
 
@@ -722,6 +733,7 @@ export const api = {
       if (data.address !== undefined) payload.address = data.address;
       if (data.shiftEnd !== undefined) payload.shiftEnd = data.shiftEnd;
       if (data.isActive !== undefined) payload.isActive = data.isActive;
+      if (data.commissionPercent !== undefined) payload.commissionPercent = data.commissionPercent;
 
       const updated = await request<BackendBranch>(`/branches/${id}`, {
         method: 'PATCH',
@@ -1138,8 +1150,15 @@ export const api = {
       return mapOrder(result.order);
     },
 
-    updateItems: async (id: string, items: OrderItem[]): Promise<Order> => {
-      const result = await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
+    updateItems: async (
+      id: string,
+      items: OrderItem[],
+    ): Promise<{ order: Order | null; deleted: boolean; tableId: string | null }> => {
+      const result = await request<{
+        order: BackendOrder | null;
+        deleted?: boolean;
+        table?: { id: string } | null;
+      }>(`/orders/${id}/items`, {
         method: 'PUT',
         body: JSON.stringify({
           items: items.map((item) => ({
@@ -1151,7 +1170,12 @@ export const api = {
           }))
         })
       });
-      return mapOrder(result.order);
+
+      return {
+        order: result.order ? mapOrder(result.order) : null,
+        deleted: result.deleted ?? false,
+        tableId: result.order?.tableId ?? result.order?.table?.id ?? result.table?.id ?? null,
+      };
     },
 
     close: async (
