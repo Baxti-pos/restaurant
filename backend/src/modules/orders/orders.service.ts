@@ -1128,12 +1128,13 @@ export const ordersService = {
       const totals = await recalcOrderTotalsTx(tx, openOrder.id);
 
       const subtotal = totals.subtotalAmount ?? zeroDecimal();
+      const commissionAmount = totals.commissionAmount ?? zeroDecimal();
       const currentDiscount = totals.discountAmount ?? zeroDecimal();
       const finalDiscount =
         discountAmount === undefined || discountAmount === null
           ? currentDiscount
           : discountAmount;
-      const finalTotal = clampMinZero(subtotal.minus(finalDiscount));
+      const finalTotal = clampMinZero(subtotal.minus(finalDiscount).plus(commissionAmount));
       const finalPaid =
         paidAmount === undefined || paidAmount === null ? finalTotal : paidAmount;
       const inventoryResult = await applyInventoryForClosedOrderTx(tx, {

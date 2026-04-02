@@ -268,7 +268,7 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
       );
       const totalSubtotal = dayOrders.reduce((s, o) => s + (o.subtotal ?? o.total), 0);
       const totalCommission = dayOrders.reduce((s, o) => s + (o.commission ?? 0), 0);
-      const totalRevenue = dayOrders.reduce((s, o) => s + o.total, 0);
+      const totalRevenue = totalSubtotal + totalCommission;
       groups.push({
         dateKey,
         orders: dayOrders,
