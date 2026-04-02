@@ -235,6 +235,28 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setLoading(false);
   };
 
+  const loadTables = async () => {
+    try {
+      const tables = await tablesFeatureApi.list();
+      setTables(tables);
+      setActiveTable((current) =>
+        current ? tables.find((table) => table.id === current.id) ?? current : current
+      );
+    } catch {}
+  };
+
+  const loadProducts = async () => {
+    if (!canViewProducts) return;
+    try {
+      const [nextProducts, nextCategories] = await Promise.all([
+        isWaiter ? api.me.products() : productsFeatureApi.list(),
+        isWaiter ? api.me.categories() : api.categories.listByBranch(activeBranchId)
+      ]);
+      setProducts(nextProducts.filter((p) => p.isActive));
+      setCategories(nextCategories);
+    } catch {}
+  };
+
   const loadGuestInbox = async (tableId: string) => {
     if (!canViewGuestInbox) {
       setGuestInbox(null);
@@ -268,31 +290,13 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
 
   useEffect(() => {
     const unsubscribe = onRealtimeEvent(({ event, payload }) => {
-      if (
-        event !== "tables.updated" &&
-        event !== "order.updated" &&
-        event !== "order.closed" &&
-        event !== "products.updated" &&
-        event !== "qr.order.created" &&
-        event !== "qr.order.accepted" &&
-        event !== "qr.order.rejected" &&
-        event !== "service.request.created" &&
-        event !== "service.request.acknowledged" &&
-        event !== "service.request.completed"
-      ) {
-        return;
-      }
-
-      if (
+      const isWrongBranch =
         payload &&
         typeof payload === "object" &&
         "branchId" in payload &&
-        (payload as { branchId?: string }).branchId !== activeBranchId
-      ) {
-        return;
-      }
+        (payload as { branchId?: string }).branchId !== activeBranchId;
 
-      void load();
+      if (isWrongBranch) return;
 
       const payloadTableId =
         payload && typeof payload === "object" && "tableId" in payload
@@ -303,12 +307,38 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
           ? (payload as { orderId?: string }).orderId
           : undefined;
 
-      if (activeTable && (!payloadTableId || payloadTableId === activeTable.id)) {
-        void loadGuestInbox(activeTable.id);
+      // Table/order events → reload tables only
+      if (
+        event === "tables.updated" ||
+        event === "order.updated" ||
+        event === "order.closed"
+      ) {
+        void loadTables();
+        if (orderModal?.id && (!payloadOrderId || payloadOrderId === orderModal.id)) {
+          void refreshOrder(orderModal.id);
+        }
+        return;
       }
 
-      if (orderModal?.id && (!payloadOrderId || payloadOrderId === orderModal.id)) {
-        void refreshOrder(orderModal.id);
+      // Product catalog changed → reload products + categories only
+      if (event === "products.updated") {
+        void loadProducts();
+        return;
+      }
+
+      // QR / service events → reload tables (badge counts) + guest inbox if same table
+      if (
+        event === "qr.order.created" ||
+        event === "qr.order.accepted" ||
+        event === "qr.order.rejected" ||
+        event === "service.request.created" ||
+        event === "service.request.acknowledged" ||
+        event === "service.request.completed"
+      ) {
+        void loadTables();
+        if (activeTable && (!payloadTableId || payloadTableId === activeTable.id)) {
+          void loadGuestInbox(activeTable.id);
+        }
       }
     });
 

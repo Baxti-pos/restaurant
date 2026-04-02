@@ -162,6 +162,68 @@ export const ordersController = {
     }
   },
 
+  async openAndCreate(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
+      }
+
+      const result = await ordersService.openAndCreate({
+        branchId: ctx.branchId,
+        actor: ctx.actor,
+        payload: req.body
+      });
+
+      emitOrderUpdated(ctx.branchId, result.created ? 'opened' : 'items_added', result.order.id);
+      if (result.tableStatusChanged) {
+        emitTablesUpdated(ctx.branchId, 'occupied', result.table.id);
+      }
+
+      return res.status(result.created ? 201 : 200).json({
+        message: result.created ? 'Stol uchun buyurtma ochildi va itemlar qoshildi' : 'Mavjud buyurtmaga itemlar qoshildi',
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
+  async syncItems(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
+      }
+
+      const canEditItems =
+        req.auth?.role === 'OWNER' ||
+        (req.auth?.role === 'MANAGER' &&
+          Array.isArray(req.auth?.permissions) &&
+          req.auth.permissions.includes('ORDERS_EDIT'));
+
+      const result = await ordersService.syncItems({
+        branchId: ctx.branchId,
+        actor: ctx.actor,
+        orderIdRaw: req.params.orderId,
+        payload: req.body,
+        canEditItems
+      });
+
+      emitOrderUpdated(ctx.branchId, 'items_synced', result.order.id);
+      if (result.order.tableId) {
+        emitTablesUpdated(ctx.branchId, 'items_synced', result.order.tableId);
+      }
+
+      return res.status(200).json({
+        message: 'Buyurtma itemlari yangilandi',
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
   async addItem(req: Request, res: Response) {
     try {
       const ctx = getContext(req);
