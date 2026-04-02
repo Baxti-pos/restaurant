@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma.js";
+import { parseDateInputInTashkent } from "../../utils/timezone.js";
 
 export class ExpensesError extends Error {
   statusCode: number;
@@ -91,7 +92,7 @@ const parseDateField = (value: unknown, label: string) => {
     throw new ExpensesError(400, `${label} yaroqsiz`);
   }
 
-  const date = new Date(value);
+  const date = parseDateInputInTashkent(value);
   if (Number.isNaN(date.getTime())) {
     throw new ExpensesError(400, `${label} yaroqsiz`);
   }

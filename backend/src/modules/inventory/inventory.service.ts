@@ -1,5 +1,10 @@
 import { InventoryUnit, Prisma, StockMovementType } from '@prisma/client';
 import { prisma } from '../../prisma.js';
+import {
+  getTashkentMonthStartKey,
+  getTashkentTodayKey,
+  parseDateInputInTashkent,
+} from '../../utils/timezone.js';
 
 type TxClient = Prisma.TransactionClient;
 type DecimalLike = Prisma.Decimal | string | number | null | undefined;
@@ -195,10 +200,7 @@ const parseDateField = (value: unknown, label: 'from' | 'to' | 'purchasedAt') =>
     throw new InventoryError(400, label + ' sanasi yaroqsiz');
   }
 
-  const trimmed = value.trim();
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
-    ? new Date(trimmed + 'T' + (label === 'to' ? '23:59:59.999' : '00:00:00.000'))
-    : new Date(trimmed);
+  const normalized = parseDateInputInTashkent(value, { endOfDay: label === 'to' });
 
   if (Number.isNaN(normalized.getTime())) {
     throw new InventoryError(400, label + ' sanasi yaroqsiz');
@@ -211,12 +213,12 @@ const parseDateRange = (
   query: Record<string, unknown> | undefined,
   defaults: 'month' | 'today' = 'month'
 ): ParsedDateRange => {
-  const now = new Date();
-  const defaultFrom =
-    defaults === 'today'
-      ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-      : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-  const defaultTo = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const todayKey = getTashkentTodayKey();
+  const defaultFrom = parseDateInputInTashkent(
+    defaults === 'today' ? todayKey : getTashkentMonthStartKey(),
+    { endOfDay: false }
+  );
+  const defaultTo = parseDateInputInTashkent(todayKey, { endOfDay: true });
 
   const from = parseDateField(query?.from, 'from') ?? defaultFrom;
   const to = parseDateField(query?.to, 'to') ?? defaultTo;
