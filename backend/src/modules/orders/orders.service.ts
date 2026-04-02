@@ -1,5 +1,6 @@
 import { OrderItemFulfillmentStatus, OrderStatus, PaymentMethod, Prisma, TableStatus } from "@prisma/client";
 import { prisma } from "../../prisma.js";
+import { parseDateInputInTashkent } from "../../utils/timezone.js";
 import { applyInventoryForClosedOrderTx } from "../inventory/inventory.service.js";
 import type { AppRole } from "../auth/auth.service.js";
 
@@ -192,10 +193,7 @@ const parseDateField = (value: unknown, label: "from" | "to") => {
     throw new OrdersError(400, `${label} sanasi yaroqsiz`);
   }
 
-  const trimmed = value.trim();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
-    ? new Date(`${trimmed}T${label === "from" ? "00:00:00.000" : "23:59:59.999"}`)
-    : new Date(trimmed);
+  const date = parseDateInputInTashkent(value, { endOfDay: label === "to" });
 
   if (Number.isNaN(date.getTime())) {
     throw new OrdersError(400, `${label} sanasi yaroqsiz`);

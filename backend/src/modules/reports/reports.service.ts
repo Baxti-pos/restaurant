@@ -1,5 +1,11 @@
 import { TableStatus, UserRole } from "@prisma/client";
 import { prisma } from "../../prisma.js";
+import {
+  getTashkentMonthStartKey,
+  getTashkentTodayKey,
+  parseDateInputInTashkent,
+  toTashkentDateKey,
+} from "../../utils/timezone.js";
 
 export class ReportsError extends Error {
   statusCode: number;
@@ -28,27 +34,16 @@ const ensureOwnedActiveBranch = async (ownerId: string, branchId: string) => {
   return branch;
 };
 
-const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
-
 const parseDateRange = (
   query: Record<string, unknown> | undefined,
   defaults: "today" | "month"
 ) => {
-  const now = new Date();
-
-  let defaultFrom: Date;
-  let defaultTo: Date;
-
-  if (defaults === "today") {
-    defaultFrom = new Date(now);
-    defaultFrom.setHours(0, 0, 0, 0);
-    defaultTo = new Date(now);
-    defaultTo.setHours(23, 59, 59, 999);
-  } else {
-    defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    defaultTo = new Date(now);
-    defaultTo.setHours(23, 59, 59, 999);
-  }
+  const todayKey = getTashkentTodayKey();
+  const defaultFrom = parseDateInputInTashkent(
+    defaults === "today" ? todayKey : getTashkentMonthStartKey(),
+    { endOfDay: false }
+  );
+  const defaultTo = parseDateInputInTashkent(todayKey, { endOfDay: true });
 
   const parseOne = (raw: unknown, label: "from" | "to", fallback: Date) => {
     if (typeof raw !== "string" || !raw.trim()) {
@@ -56,9 +51,7 @@ const parseDateRange = (
     }
 
     const trimmed = raw.trim();
-    const date = isDateOnly(trimmed)
-      ? new Date(`${trimmed}T${label === "from" ? "00:00:00.000" : "23:59:59.999"}`)
-      : new Date(trimmed);
+    const date = parseDateInputInTashkent(trimmed, { endOfDay: label === "to" });
 
     if (Number.isNaN(date.getTime())) {
       throw new ReportsError(400, `${label} sanasi yaroqsiz`);
@@ -77,7 +70,7 @@ const parseDateRange = (
   return { from, to };
 };
 
-const toDateKey = (date: Date) => date.toISOString().slice(0, 10);
+const toDateKey = (date: Date) => toTashkentDateKey(date);
 
 export const reportsService = {
   async salesSummary(ownerId: string, branchId: string, query?: Record<string, unknown>) {
