@@ -378,11 +378,8 @@ export const productsService = {
       throw new ProductsError(404, "Mahsulot topilmadi");
     }
 
-    return prisma.product.update({
+    return prisma.product.delete({
       where: { id: productId },
-      data: {
-        isActive: false
-      },
       select: productSelect
     });
   }

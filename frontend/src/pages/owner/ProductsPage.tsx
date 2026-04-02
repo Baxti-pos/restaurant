@@ -51,6 +51,8 @@ export function ProductsPage({
   const [prodErrors, setProdErrors] = useState<Record<string, string>>({});
   const [savingProd, setSavingProd] = useState(false);
   const [togglingProdId, setTogglingProdId] = useState<string | null>(null);
+  const [deleteProd, setDeleteProd] = useState<Product | null>(null);
+  const [deletingProd, setDeletingProd] = useState(false);
   const [categoryModal, setCategoryModal] = useState<{
     open: boolean;
     editing: Category | null;
@@ -276,6 +278,21 @@ export function ProductsPage({
       setTogglingProdId(null);
     }
   };
+  const handleDeleteProd = async () => {
+    if (!canManageProducts || !deleteProd) return;
+    setDeletingProd(true);
+    try {
+      await productsFeatureApi.delete(deleteProd.id);
+      toast.deleted("Mahsulot o'chirildi");
+      setDeleteProd(null);
+      load();
+    } catch {
+      toast.error();
+    } finally {
+      setDeletingProd(false);
+    }
+  };
+
   const totalProductsCount = products.length;
   return (
     <div className="space-y-4 md:space-y-6">
@@ -517,6 +534,12 @@ export function ProductsPage({
                           <Edit2 className="h-4 w-4" />
                         </button>
                         <button
+                    onClick={() => setDeleteProd(p)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 rounded-lg">
+
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                        <button
                     type="button"
                     onClick={() => handleToggleProdStatus(p)}
                     disabled={togglingProdId === p.id}
@@ -596,6 +619,12 @@ export function ProductsPage({
                         className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
 
                               <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                        onClick={() => setDeleteProd(p)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                             <button
                         type="button"
@@ -843,6 +872,14 @@ export function ProductsPage({
         title="Kategoriyani o'chirish"
         message={`"${deleteCat?.name}" kategoriyani o'chirishni tasdiqlaysizmi?`}
         isLoading={deletingCat} />
+
+      <ConfirmDialog
+        isOpen={!!deleteProd}
+        onClose={() => setDeleteProd(null)}
+        onConfirm={handleDeleteProd}
+        title="Mahsulotni o'chirish"
+        message={`"${deleteProd?.name}" mahsulotni butunlay o'chirishni tasdiqlaysizmi? Bu amalni qaytarib bo'lmaydi.`}
+        isLoading={deletingProd} />
 
     </div>);
 

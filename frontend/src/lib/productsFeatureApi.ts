@@ -66,5 +66,9 @@ export const productsFeatureApi = {
     });
 
     return mapProduct(updated);
+  },
+
+  async delete(id: string): Promise<void> {
+    await authRequest<void>(`/products/${id}`, { method: 'DELETE' });
   }
 };
