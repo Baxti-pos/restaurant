@@ -718,7 +718,8 @@ export const api = {
           name: data.name,
           address: data.address,
           shiftEnd: data.shiftEnd,
-          isActive: data.isActive
+          isActive: data.isActive,
+          commissionPercent: data.commissionPercent ?? 0
         })
       });
 
@@ -732,6 +733,7 @@ export const api = {
       if (data.address !== undefined) payload.address = data.address;
       if (data.shiftEnd !== undefined) payload.shiftEnd = data.shiftEnd;
       if (data.isActive !== undefined) payload.isActive = data.isActive;
+      if (data.commissionPercent !== undefined) payload.commissionPercent = data.commissionPercent;
 
       const updated = await request<BackendBranch>(`/branches/${id}`, {
         method: 'PATCH',
