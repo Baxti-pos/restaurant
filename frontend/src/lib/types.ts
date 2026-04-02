@@ -52,6 +52,7 @@ export interface Branch {
   shiftStart: string;
   shiftEnd: string;
   timezone: 'Asia/Tashkent';
+  commissionPercent: number;
   isActive: boolean;
 }
 
@@ -157,6 +158,10 @@ export interface Order {
   waiterName: string;
   status: OrderStatus;
   items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  commissionPercent: number;
+  commission: number;
   total: number;
   paymentType?: PaymentType;
   createdAt: string;

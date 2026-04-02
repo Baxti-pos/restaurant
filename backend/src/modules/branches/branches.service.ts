@@ -51,6 +51,15 @@ const parseOptionalBoolean = (value: unknown) => {
   return value;
 };
 
+const parseCommissionPercent = (value: unknown) => {
+  if (value === undefined) return undefined;
+  const n = typeof value === "string" ? parseFloat(value) : typeof value === "number" ? value : NaN;
+  if (isNaN(n) || n < 0 || n > 100) {
+    throw new BranchesError(400, "commissionPercent 0 dan 100 gacha bo'lishi kerak");
+  }
+  return new Prisma.Decimal(n);
+};
+
 const parseOptionalShiftEnd = (value: unknown) => {
   const parsed = parseOptionalString(value);
   if (parsed === undefined || parsed === null) {
@@ -114,6 +123,7 @@ export const branchesService = {
         name: true,
         address: true,
         shiftEnd: true,
+        commissionPercent: true,
         isActive: true,
         createdAt: true,
         updatedAt: true
@@ -134,6 +144,7 @@ export const branchesService = {
         name: true,
         address: true,
         shiftEnd: true,
+        commissionPercent: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -164,6 +175,7 @@ export const branchesService = {
     const address = parseOptionalString(payload.address);
     const shiftEnd = parseOptionalShiftEnd(payload.shiftEnd);
     const isActive = parseOptionalBoolean(payload.isActive);
+    const commissionPercent = parseCommissionPercent(payload.commissionPercent);
 
     try {
       const branch = await prisma.branch.create({
@@ -172,7 +184,8 @@ export const branchesService = {
           name,
           address: address ?? null,
           shiftEnd: shiftEnd ?? null,
-          ...(isActive !== undefined ? { isActive } : {})
+          ...(isActive !== undefined ? { isActive } : {}),
+          ...(commissionPercent !== undefined ? { commissionPercent } : {})
         },
         select: {
           id: true,
@@ -220,6 +233,13 @@ export const branchesService = {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "commissionPercent")) {
+      const commissionPercent = parseCommissionPercent(payload.commissionPercent);
+      if (commissionPercent !== undefined) {
+        data.commissionPercent = commissionPercent;
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       throw new BranchesError(400, "Yangilash uchun kamida bitta maydon yuboring");
     }
@@ -257,6 +277,7 @@ export const branchesService = {
         name: true,
         address: true,
         shiftEnd: true,
+        commissionPercent: true,
         isActive: true,
         updatedAt: true
       }

@@ -495,6 +495,10 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       waiterName: user?.name ?? roleLabel,
       status: "open",
       items: [],
+      subtotal: 0,
+      discount: 0,
+      commissionPercent: 0,
+      commission: 0,
       total: 0,
       createdAt: new Date().toISOString()
     });
@@ -513,6 +517,10 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
         waiterName: orderModal.waiterName,
         status: "open",
         items: orderModal.items,
+        subtotal: orderModal.subtotal,
+        discount: orderModal.discount,
+        commissionPercent: orderModal.commissionPercent,
+        commission: orderModal.commission,
         total: orderModal.total,
         createdAt: orderModal.createdAt
       });
@@ -542,8 +550,13 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     }
   };
 
-  const recalcTotal = (items: Order["items"]) =>
-    items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const recalcTotal = (items: Order["items"]) => {
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discount = orderModal?.discount ?? 0;
+    const commissionPercent = orderModal?.commissionPercent ?? 0;
+    const commission = Math.round(subtotal * commissionPercent / 100);
+    return subtotal - discount + commission;
+  };
 
   const handleIncreaseItem = (itemId: string) => {
     if (!orderModal || !canSubmitOrderChanges) return;
@@ -928,11 +941,37 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
       </div>
 
       <div className="mt-3 flex-shrink-0 space-y-2.5 border-t border-slate-200 pt-3">
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-600">Jami summa:</span>
-          <span className="text-lg font-bold tabular-nums text-indigo-600">
-            {formatCurrency(orderModal?.total ?? 0)}
-          </span>
+        <div className="space-y-1 mb-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-500">Mahsulotlar:</span>
+            <span className="text-sm tabular-nums text-slate-700">
+              {formatCurrency(orderModal?.subtotal ?? 0)}
+            </span>
+          </div>
+          {(orderModal?.discount ?? 0) > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">Chegirma:</span>
+              <span className="text-sm tabular-nums text-emerald-600">
+                -{formatCurrency(orderModal?.discount ?? 0)}
+              </span>
+            </div>
+          )}
+          {(orderModal?.commission ?? 0) > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-500">
+                Xizmat ({orderModal?.commissionPercent ?? 0}%):
+              </span>
+              <span className="text-sm tabular-nums text-amber-600">
+                +{formatCurrency(orderModal?.commission ?? 0)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between border-t border-slate-100 pt-1">
+            <span className="text-sm font-semibold text-slate-600">Jami summa:</span>
+            <span className="text-lg font-bold tabular-nums text-indigo-600">
+              {formatCurrency(orderModal?.total ?? 0)}
+            </span>
+          </div>
         </div>
 
         {orderModal?.id ? (
@@ -1591,11 +1630,27 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
             </div>
 
             <div className="mb-[10px] mt-[10px] flex-shrink-0 border-t border-slate-200 bg-white p-4 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-500">Jami summa</span>
-                <span className="text-xl font-bold text-indigo-600">
-                  {formatCurrency(orderModal.total)}
-                </span>
+              <div className="mb-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Mahsulotlar:</span>
+                  <span className="text-sm tabular-nums text-slate-700">{formatCurrency(orderModal.subtotal ?? 0)}</span>
+                </div>
+                {(orderModal.discount ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Chegirma:</span>
+                    <span className="text-sm tabular-nums text-emerald-600">-{formatCurrency(orderModal.discount ?? 0)}</span>
+                  </div>
+                )}
+                {(orderModal.commission ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Xizmat ({orderModal.commissionPercent ?? 0}%):</span>
+                    <span className="text-sm tabular-nums text-amber-600">+{formatCurrency(orderModal.commission ?? 0)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t border-slate-100 pt-1">
+                  <span className="text-sm font-medium text-slate-500">Jami summa</span>
+                  <span className="text-xl font-bold text-indigo-600">{formatCurrency(orderModal.total)}</span>
+                </div>
               </div>
               {orderModal.id ? (
                 <div className="flex gap-3">

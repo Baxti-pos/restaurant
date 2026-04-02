@@ -238,6 +238,8 @@ const orderSelect = {
   status: true,
   subtotalAmount: true,
   discountAmount: true,
+  commissionPercent: true,
+  commissionAmount: true,
   totalAmount: true,
   paidAmount: true,
   paymentMethod: true,
@@ -329,6 +331,7 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
     where: { id: orderId },
     select: {
       id: true,
+      branchId: true,
       discountAmount: true
     }
   });
@@ -346,18 +349,33 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
 
   const subtotal = aggregated._sum.lineTotal ?? zeroDecimal();
   const discount = order.discountAmount ?? zeroDecimal();
-  const total = clampMinZero(subtotal.minus(discount));
+
+  let commissionPercent = zeroDecimal();
+  const branch = await tx.branch.findUnique({
+    where: { id: order.branchId },
+    select: { commissionPercent: true }
+  });
+  if (branch) {
+    commissionPercent = branch.commissionPercent ?? zeroDecimal();
+  }
+
+  const commissionAmount = subtotal.mul(commissionPercent).div(100).toDecimalPlaces(2);
+  const total = clampMinZero(subtotal.minus(discount).plus(commissionAmount));
 
   return tx.order.update({
     where: { id: orderId },
     data: {
       subtotalAmount: subtotal,
+      commissionPercent,
+      commissionAmount,
       totalAmount: total
     },
     select: {
       id: true,
       subtotalAmount: true,
       discountAmount: true,
+      commissionPercent: true,
+      commissionAmount: true,
       totalAmount: true
     }
   });

@@ -1,0 +1,1 @@
+ALTER TABLE "Branch" ADD COLUMN "commissionPercent" DECIMAL(5,2) NOT NULL DEFAULT 0;

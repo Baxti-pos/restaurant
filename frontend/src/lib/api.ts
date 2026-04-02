@@ -36,6 +36,7 @@ interface BackendBranch {
   name: string;
   address: string | null;
   shiftEnd?: string | null;
+  commissionPercent?: string | number | null;
   isActive: boolean;
 }
 
@@ -148,6 +149,10 @@ interface BackendOrder {
   tableId: string | null;
   waiterId: string | null;
   status: BackendOrderStatus;
+  subtotalAmount: string | number;
+  discountAmount: string | number;
+  commissionPercent: string | number;
+  commissionAmount: string | number;
   totalAmount: string | number;
   paymentMethod: BackendPaymentMethod | null;
   openedAt: string;
@@ -449,6 +454,7 @@ const mapBranch = (branch: BackendBranch): Branch => ({
   shiftStart: DEFAULT_SHIFT_START,
   shiftEnd: branch.shiftEnd ?? DEFAULT_SHIFT_END,
   timezone: 'Asia/Tashkent',
+  commissionPercent: toNumber(branch.commissionPercent ?? 0),
   isActive: branch.isActive
 });
 
@@ -576,6 +582,10 @@ const mapOrder = (order: BackendOrder): Order => ({
   waiterName: order.waiter?.fullName ?? 'Noma\'lum',
   status: order.status === 'CLOSED' ? 'closed' : 'open',
   items: order.items.map(mapOrderItem),
+  subtotal: toNumber(order.subtotalAmount),
+  discount: toNumber(order.discountAmount),
+  commissionPercent: toNumber(order.commissionPercent),
+  commission: toNumber(order.commissionAmount),
   total: toNumber(order.totalAmount),
   paymentType: mapPaymentType(order.paymentMethod),
   createdAt: order.openedAt,
