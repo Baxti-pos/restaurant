@@ -516,9 +516,9 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
         total: orderModal.total,
         createdAt: orderModal.createdAt
       });
-      setOrderModal(created);
       toast.success("Buyurtma berildi");
-      await Promise.all([load(), loadGuestInbox(created.tableId)]);
+      await Promise.all([loadTables(), loadGuestInbox(created.tableId)]);
+      closeOrderSheet();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -532,9 +532,9 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
     setClosing(true);
     try {
       const updated = await api.orders.updateItems(orderModal.id, orderModal.items);
-      setOrderModal(updated);
       toast.success("Buyurtma saqlandi");
-      await Promise.all([load(), loadGuestInbox(updated.tableId)]);
+      await Promise.all([loadTables(), loadGuestInbox(updated.tableId)]);
+      closeOrderSheet();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -755,8 +755,8 @@ export function TablesPage({ activeBranchId, activeBranchName }: TablesPageProps
         toast.error("Checkni chop etib bo'lmadi. Xprinter sozlamasini tekshiring");
       }
 
+      await loadTables();
       closeOrderSheet();
-      await load();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
