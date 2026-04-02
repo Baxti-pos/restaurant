@@ -272,6 +272,7 @@ function AppRoutes() {
 
   const activeBranch = branches.find((branch) => branch.id === activeBranchId);
   const activeBranchName = activeBranch?.name || '';
+  const activeBranchCommissionPercent = activeBranch?.commissionPercent ?? 0;
 
   const ProtectedRoute = ({ children, page }: { children: React.ReactNode; page: string }) => {
     if (!canAccessPage(user, page)) {
@@ -330,7 +331,11 @@ function AppRoutes() {
           path='/tables'
           element={
             <ProtectedRoute page='tables'>
-              <TablesPage activeBranchId={activeBranchId} activeBranchName={activeBranchName} />
+              <TablesPage
+                activeBranchId={activeBranchId}
+                activeBranchName={activeBranchName}
+                activeBranchCommissionPercent={activeBranchCommissionPercent}
+              />
             </ProtectedRoute>
           }
         />

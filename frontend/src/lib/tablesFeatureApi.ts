@@ -17,13 +17,20 @@ interface BackendTable {
   pendingQrOrdersCount?: number;
   activeServiceRequestsCount?: number;
   readyItemsCount?: number;
+  currentOrderTotal?: string | number | null;
+  currentOrderItemCount?: number;
   orders?: Array<{
     id: string;
+    totalAmount?: string | number | null;
     waiterId?: string | null;
     waiter?: {
       id: string;
       fullName: string;
     } | null;
+    items?: Array<{
+      quantity: number;
+      fulfillmentStatus?: 'ACCEPTED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELED';
+    }>;
   }>;
 }
 
@@ -74,7 +81,17 @@ const mapTable = (table: BackendTable): TableItem => ({
   qrLastScannedAt: table.qrLastScannedAt ?? null,
   pendingQrOrdersCount: table.pendingQrOrdersCount ?? 0,
   activeServiceRequestsCount: table.activeServiceRequestsCount ?? 0,
-  readyItemsCount: table.readyItemsCount ?? 0
+  readyItemsCount: table.readyItemsCount ?? 0,
+  currentOrderTotal:
+    table.currentOrderTotal != null
+      ? Number(table.currentOrderTotal)
+      : table.orders?.[0]?.totalAmount != null
+        ? Number(table.orders[0].totalAmount)
+        : null,
+  currentOrderItemCount:
+    table.currentOrderItemCount ??
+    table.orders?.[0]?.items?.reduce((sum, item) => sum + item.quantity, 0) ??
+    0
 });
 
 const mapQr = (qr: BackendTableQr): TableQrData => ({

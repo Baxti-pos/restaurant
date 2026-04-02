@@ -866,9 +866,75 @@ export const ordersService = {
         }
       }
 
+      const remainingItemsCount = await tx.orderItem.count({
+        where: { orderId: openOrder.id }
+      });
+
+      if (remainingItemsCount === 0) {
+        await tx.order.delete({
+          where: { id: openOrder.id }
+        });
+
+        let tableStatusChanged = false;
+        let table: { id: string; name: string; status: TableStatus } | null = null;
+
+        if (openOrder.tableId) {
+          const remainingOpenOrders = await tx.order.count({
+            where: {
+              tableId: openOrder.tableId,
+              status: "OPEN"
+            }
+          });
+
+          const existingTable = await tx.table.findUnique({
+            where: { id: openOrder.tableId },
+            select: {
+              id: true,
+              name: true,
+              status: true
+            }
+          });
+
+          if (existingTable) {
+            if (
+              remainingOpenOrders === 0 &&
+              existingTable.status !== TableStatus.DISABLED &&
+              existingTable.status !== TableStatus.AVAILABLE
+            ) {
+              table = await tx.table.update({
+                where: { id: existingTable.id },
+                data: { status: TableStatus.AVAILABLE },
+                select: {
+                  id: true,
+                  name: true,
+                  status: true
+                }
+              });
+              tableStatusChanged = true;
+            } else {
+              table = existingTable;
+            }
+          }
+        }
+
+        return {
+          order: null,
+          deleted: true,
+          orderId: openOrder.id,
+          table,
+          tableStatusChanged
+        };
+      }
+
       await recalcOrderTotalsTx(tx, openOrder.id);
       const order = await getOrderByIdTx(tx, branchId, openOrder.id);
-      return { order };
+      return {
+        order,
+        deleted: false,
+        orderId: openOrder.id,
+        table: null,
+        tableStatusChanged: false
+      };
     });
   },
 

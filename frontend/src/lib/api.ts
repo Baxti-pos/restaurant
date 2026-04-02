@@ -1150,8 +1150,15 @@ export const api = {
       return mapOrder(result.order);
     },
 
-    updateItems: async (id: string, items: OrderItem[]): Promise<Order> => {
-      const result = await request<{ order: BackendOrder }>(`/orders/${id}/items`, {
+    updateItems: async (
+      id: string,
+      items: OrderItem[],
+    ): Promise<{ order: Order | null; deleted: boolean; tableId: string | null }> => {
+      const result = await request<{
+        order: BackendOrder | null;
+        deleted?: boolean;
+        table?: { id: string } | null;
+      }>(`/orders/${id}/items`, {
         method: 'PUT',
         body: JSON.stringify({
           items: items.map((item) => ({
@@ -1163,7 +1170,12 @@ export const api = {
           }))
         })
       });
-      return mapOrder(result.order);
+
+      return {
+        order: result.order ? mapOrder(result.order) : null,
+        deleted: result.deleted ?? false,
+        tableId: result.order?.tableId ?? result.order?.table?.id ?? result.table?.id ?? null,
+      };
     },
 
     close: async (

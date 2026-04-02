@@ -102,6 +102,8 @@ export interface TableItem {
   pendingQrOrdersCount?: number;
   activeServiceRequestsCount?: number;
   readyItemsCount?: number;
+  currentOrderTotal?: number | null;
+  currentOrderItemCount?: number;
 }
 
 export interface TableQrData {
