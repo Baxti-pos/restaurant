@@ -189,6 +189,30 @@ export const ordersController = {
     }
   },
 
+  async openAndCreateTakeout(req: Request, res: Response) {
+    try {
+      const ctx = getContext(req);
+      if (!ctx) {
+        return res.status(401).json({ message: 'Autorizatsiya talab qilinadi' });
+      }
+
+      const result = await ordersService.openAndCreateTakeout({
+        branchId: ctx.branchId,
+        actor: ctx.actor,
+        payload: req.body
+      });
+
+      emitOrderUpdated(ctx.branchId, 'takeout_opened', result.order.id);
+
+      return res.status(201).json({
+        message: 'Olib ketish buyurtma yaratildi',
+        data: result
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  },
+
   async syncItems(req: Request, res: Response) {
     try {
       const ctx = getContext(req);

@@ -18,6 +18,7 @@ interface BackendOrder {
   id: string;
   branchId: string;
   tableId: string | null;
+  orderNumber: number;
   waiterId: string | null;
   status: 'OPEN' | 'CLOSED' | 'CANCELLED';
   subtotalAmount: string | number;
@@ -63,7 +64,9 @@ const mapOrder = (order: BackendOrder): Order => ({
   id: order.id,
   branchId: order.branchId,
   tableId: order.tableId ?? order.table?.id ?? '',
-  tableName: order.table?.name ?? 'Stol',
+  tableName: order.table?.name ?? `Olib ketish #${order.orderNumber}`,
+  orderNumber: order.orderNumber,
+  isTakeout: !order.tableId && !order.table,
   waiterId: order.waiterId ?? order.waiter?.id ?? '',
   waiterName: order.waiter?.fullName ?? 'Noma\'lum',
   status: order.status === 'CLOSED' ? 'closed' : 'open',

@@ -109,6 +109,16 @@ export const registerServiceWorker = async () => {
     return;
   }
 
+  if (import.meta.env.DEV) {
+    try {
+      const registrations = await window.navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    } catch (error) {
+      console.error("Dev service worker tozalanmadi:", error);
+    }
+    return;
+  }
+
   try {
     await window.navigator.serviceWorker.register("/sw.js", {
       scope: "/",
