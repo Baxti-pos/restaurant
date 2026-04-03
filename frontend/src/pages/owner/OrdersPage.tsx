@@ -69,6 +69,29 @@ function matchesActiveBranch(payload: unknown, activeBranchId: string): boolean 
 
   return (payload as { branchId?: string }).branchId === activeBranchId;
 }
+
+function getOrderItemQty(order: Order): number {
+  return order.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function SalesSummaryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-3 text-indigo-700">
+      <div className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-bold leading-tight text-indigo-700">
+        {value}
+      </div>
+    </div>
+  );
+}
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function OrdersPage({
   activeBranchId,
@@ -190,7 +213,22 @@ interface DayGroup {
   totalSubtotal: number;
   totalCommission: number;
   totalRevenue: number;
+  dineInQty: number;
+  dineInSubtotal: number;
+  takeoutQty: number;
+  takeoutSubtotal: number;
 }
+
+interface ProductBreakdownRow {
+  name: string;
+  dineInQty: number;
+  dineInTotal: number;
+  takeoutQty: number;
+  takeoutTotal: number;
+  totalQty: number;
+  total: number;
+}
+
 function SalesTab({ activeBranchId }: { activeBranchId: string }) {
   const [rangeMode, setRangeMode] = useState<RangeMode>("today");
   const [customFrom, setCustomFrom] = useState("");
@@ -262,13 +300,16 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
     }
     const groups: DayGroup[] = [];
     for (const [dateKey, dayOrders] of map.entries()) {
-      const totalQty = dayOrders.reduce(
-        (s, o) => s + o.items.reduce((ss, i) => ss + i.quantity, 0),
-        0,
-      );
-      const totalSubtotal = dayOrders.reduce((s, o) => s + (o.subtotal ?? o.total), 0);
-      const totalCommission = dayOrders.reduce((s, o) => s + (o.commission ?? 0), 0);
+      const dineInOrders = dayOrders.filter((order) => !order.isTakeout);
+      const takeoutOrders = dayOrders.filter((order) => order.isTakeout);
+      const totalQty = dayOrders.reduce((sum, order) => sum + getOrderItemQty(order), 0);
+      const totalSubtotal = dayOrders.reduce((sum, order) => sum + (order.subtotal ?? order.total), 0);
+      const totalCommission = dayOrders.reduce((sum, order) => sum + (order.commission ?? 0), 0);
       const totalRevenue = totalSubtotal + totalCommission;
+      const dineInQty = dineInOrders.reduce((sum, order) => sum + getOrderItemQty(order), 0);
+      const dineInSubtotal = dineInOrders.reduce((sum, order) => sum + (order.subtotal ?? order.total), 0);
+      const takeoutQty = takeoutOrders.reduce((sum, order) => sum + getOrderItemQty(order), 0);
+      const takeoutSubtotal = takeoutOrders.reduce((sum, order) => sum + (order.subtotal ?? order.total), 0);
       groups.push({
         dateKey,
         orders: dayOrders,
@@ -276,6 +317,10 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
         totalSubtotal,
         totalCommission,
         totalRevenue,
+        dineInQty,
+        dineInSubtotal,
+        takeoutQty,
+        takeoutSubtotal,
       });
     }
     return groups.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
@@ -300,31 +345,47 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
     });
   };
   // Build product breakdown for a day group
-  const getProductBreakdown = (group: DayGroup) => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        qty: number;
-        total: number;
-      }
-    >();
-    for (const o of group.orders) {
-      for (const item of o.items) {
+  const getProductBreakdown = (group: DayGroup): ProductBreakdownRow[] => {
+    const map = new Map<string, ProductBreakdownRow>();
+
+    for (const order of group.orders) {
+      for (const item of order.items) {
+        const isTakeout = Boolean(order.isTakeout);
+        const itemTotal = item.quantity * item.price;
         const existing = map.get(item.productName);
+
         if (existing) {
-          existing.qty += item.quantity;
-          existing.total += item.quantity * item.price;
-        } else {
-          map.set(item.productName, {
-            name: item.productName,
-            qty: item.quantity,
-            total: item.quantity * item.price,
-          });
+          if (isTakeout) {
+            existing.takeoutQty += item.quantity;
+            existing.takeoutTotal += itemTotal;
+          } else {
+            existing.dineInQty += item.quantity;
+            existing.dineInTotal += itemTotal;
+          }
+          existing.totalQty += item.quantity;
+          existing.total += itemTotal;
+          continue;
         }
+
+        map.set(item.productName, {
+          name: item.productName,
+          dineInQty: isTakeout ? 0 : item.quantity,
+          dineInTotal: isTakeout ? 0 : itemTotal,
+          takeoutQty: isTakeout ? item.quantity : 0,
+          takeoutTotal: isTakeout ? itemTotal : 0,
+          totalQty: item.quantity,
+          total: itemTotal,
+        });
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.totalQty !== a.totalQty) {
+        return b.totalQty - a.totalQty;
+      }
+
+      return b.total - a.total;
+    });
   };
   return (
     <div className="space-y-4">
@@ -472,32 +533,56 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
                         {products.map((p) => (
                           <div
                             key={p.name}
-                            className="flex justify-between items-start text-sm"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
                           >
-                            <span className="text-slate-700 flex-1 mr-2">
-                              {p.name}
-                            </span>
-                            <span className="font-semibold text-slate-800 whitespace-nowrap">
-                              {p.qty} ta — {formatCurrency(p.total)}
-                            </span>
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="font-medium text-slate-800">{p.name}</span>
+                              <span className="text-right text-xs font-semibold text-indigo-700 whitespace-nowrap">
+                                {p.totalQty} ta / {formatCurrency(p.total)}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                              <div className="rounded-lg bg-slate-50 px-2.5 py-2">
+                                <div className="text-slate-500">Stol</div>
+                                <div className="mt-1 flex items-center gap-2 whitespace-nowrap leading-tight">
+                                  <span className="font-semibold text-slate-800">{p.dineInQty} ta</span>
+                                  <span className="text-slate-600">{formatCurrency(p.dineInTotal)}</span>
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-amber-50 px-2.5 py-2">
+                                <div className="text-amber-700">Olib ketish</div>
+                                {p.takeoutQty > 0 && (
+                                  <div className="mt-1 flex items-center gap-2 whitespace-nowrap leading-tight">
+                                    <span className="font-semibold text-amber-900">{p.takeoutQty} ta</span>
+                                    <span className="text-amber-800">{formatCurrency(p.takeoutTotal)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-3 pt-2 border-t border-slate-200 space-y-1">
-                        <div className="flex justify-between text-sm text-slate-600">
-                          <span>Mahsulotlar:</span>
-                          <span>{formatCurrency(group.totalSubtotal)}</span>
-                        </div>
-                        {group.totalCommission > 0 && (
-                          <div className="flex justify-between text-sm text-amber-700">
-                            <span>Xizmat haqi:</span>
-                            <span>+{formatCurrency(group.totalCommission)}</span>
-                          </div>
+                      <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
+                        <SalesSummaryMetric
+                          label="Stol"
+                          value={`${group.dineInQty} ta / ${formatCurrency(group.dineInSubtotal)}`}
+                        />
+                        {group.takeoutQty > 0 && (
+                          <SalesSummaryMetric
+                            label="Olib ketish"
+                            value={`${group.takeoutQty} ta / ${formatCurrency(group.takeoutSubtotal)}`}
+                          />
                         )}
-                        <div className="flex justify-between text-sm font-semibold text-indigo-700 pt-1 border-t border-slate-200">
-                          <span>Jami:</span>
-                          <span>{formatCurrency(group.totalRevenue)}</span>
-                        </div>
+                        {group.totalCommission > 0 && (
+                          <SalesSummaryMetric
+                            label="Xizmat haqi"
+                            value={`+${formatCurrency(group.totalCommission)}`}
+                          />
+                        )}
+                        <SalesSummaryMetric
+                          label="Jami"
+                          value={`${group.totalQty} ta / ${formatCurrency(group.totalRevenue)}`}
+                        />
                       </div>
                     </div>
                   )}
@@ -561,16 +646,19 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
                           <tr>
                             <td colSpan={4} className="p-0">
                               <div className="bg-slate-50 border-b border-slate-200 border-l-4 border-l-indigo-400 px-6 py-4">
-                                <table className="w-full text-sm">
+                                <table className="w-full table-fixed text-sm">
                                   <thead>
                                     <tr className="border-b border-slate-200">
-                                      <th className="pb-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                      <th className="w-1/4 pb-2 pr-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                         Mahsulot
                                       </th>
-                                      <th className="pb-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                        Soni
+                                      <th className="w-1/4 pb-2 pr-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        Stol
                                       </th>
-                                      <th className="pb-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                      <th className="w-1/4 pb-2 pr-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        Olib ketish
+                                      </th>
+                                      <th className="w-1/4 pb-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                         Jami
                                       </th>
                                     </tr>
@@ -578,46 +666,54 @@ function SalesTab({ activeBranchId }: { activeBranchId: string }) {
                                   <tbody className="divide-y divide-slate-100">
                                     {products.map((p) => (
                                       <tr key={p.name}>
-                                        <td className="py-2 text-slate-700 font-medium">
+                                        <td className="w-1/4 py-2 pr-4 text-slate-700 font-medium align-top">
                                           {p.name}
                                         </td>
-                                        <td className="py-2 text-center text-slate-600">
-                                          {p.qty} ta
+                                        <td className="w-1/4 py-2 pr-4 text-left text-slate-600 align-top">
+                                          <div className="flex items-center gap-2 whitespace-nowrap leading-tight">
+                                            <span className="font-semibold text-slate-800">{p.dineInQty} ta</span>
+                                            <span className="text-xs text-slate-500">{formatCurrency(p.dineInTotal)}</span>
+                                          </div>
                                         </td>
-                                        <td className="py-2 text-right text-slate-800 font-semibold">
-                                          {formatCurrency(p.total)}
+                                        <td className="w-1/4 py-2 pr-4 text-left text-amber-800 align-top">
+                                          {p.takeoutQty > 0 && (
+                                            <div className="flex items-center gap-2 whitespace-nowrap leading-tight">
+                                              <span className="font-semibold text-amber-900">{p.takeoutQty} ta</span>
+                                              <span className="text-xs text-amber-700">{formatCurrency(p.takeoutTotal)}</span>
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="w-1/4 py-2 text-left text-slate-800 align-top">
+                                          <div className="flex items-center gap-2 whitespace-nowrap leading-tight">
+                                            <span className="font-semibold">{p.totalQty} ta</span>
+                                            <span className="text-xs text-slate-500">{formatCurrency(p.total)}</span>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))}
                                   </tbody>
                                 </table>
-                                <div className="mt-3 pt-3 border-t border-slate-200 flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2 text-sm text-slate-600">
-                                  <span className="sm:mr-auto">
-                                    Sotilgan:{" "}
-                                    <span className="font-semibold text-slate-800">
-                                      {group.totalQty} ta
-                                    </span>
-                                  </span>
-                                  <span>
-                                    Mahsulotlar:{" "}
-                                    <span className="font-semibold text-slate-800">
-                                      {formatCurrency(group.totalSubtotal)}
-                                    </span>
-                                  </span>
-                                  {group.totalCommission > 0 && (
-                                    <span>
-                                      Xizmat haqi:{" "}
-                                      <span className="font-semibold text-amber-700">
-                                        +{formatCurrency(group.totalCommission)}
-                                      </span>
-                                    </span>
+                                <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
+                                  <SalesSummaryMetric
+                                    label="Stol"
+                                    value={`${group.dineInQty} ta / ${formatCurrency(group.dineInSubtotal)}`}
+                                  />
+                                  {group.takeoutQty > 0 && (
+                                    <SalesSummaryMetric
+                                      label="Olib ketish"
+                                      value={`${group.takeoutQty} ta / ${formatCurrency(group.takeoutSubtotal)}`}
+                                    />
                                   )}
-                                  <span>
-                                    Jami:{" "}
-                                    <span className="font-semibold text-indigo-700">
-                                      {formatCurrency(group.totalRevenue)}
-                                    </span>
-                                  </span>
+                                  {group.totalCommission > 0 && (
+                                    <SalesSummaryMetric
+                                      label="Xizmat haqi"
+                                      value={`+${formatCurrency(group.totalCommission)}`}
+                                    />
+                                  )}
+                                  <SalesSummaryMetric
+                                    label="Jami"
+                                    value={`${group.totalQty} ta / ${formatCurrency(group.totalRevenue)}`}
+                                  />
                                 </div>
                               </div>
                             </td>

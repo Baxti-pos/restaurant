@@ -330,6 +330,7 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
     select: {
       id: true,
       branchId: true,
+      tableId: true,
       discountAmount: true
     }
   });
@@ -349,12 +350,14 @@ const recalcOrderTotalsTx = async (tx: TxClient, orderId: string) => {
   const discount = order.discountAmount ?? zeroDecimal();
 
   let commissionPercent = zeroDecimal();
-  const branch = await tx.branch.findUnique({
-    where: { id: order.branchId },
-    select: { commissionPercent: true }
-  });
-  if (branch) {
-    commissionPercent = branch.commissionPercent ?? zeroDecimal();
+  if (order.tableId) {
+    const branch = await tx.branch.findUnique({
+      where: { id: order.branchId },
+      select: { commissionPercent: true }
+    });
+    if (branch) {
+      commissionPercent = branch.commissionPercent ?? zeroDecimal();
+    }
   }
 
   const commissionAmount = subtotal.mul(commissionPercent).div(100).toDecimalPlaces(2);
@@ -731,6 +734,97 @@ export const ordersService = {
           table: { id: table.id, name: table.name, status: TableStatus.OCCUPIED },
           created,
           tableStatusChanged
+        };
+      });
+    } catch (error) {
+      throw mapPrismaError(error);
+    }
+  },
+
+  async openAndCreateTakeout(params: {
+    branchId: string;
+    actor: OrderActor;
+    payload: unknown;
+  }) {
+    const { branchId, actor, payload } = params;
+    await ensureActiveBranch(branchId);
+
+    if (!isObject(payload)) {
+      throw new OrdersError(400, "So'rov ma'lumoti yaroqsiz");
+    }
+
+    const rawItems = payload.items;
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      throw new OrdersError(400, "Kamida bitta mahsulot kiritilishi shart");
+    }
+
+    const items = rawItems.map((item, i) => {
+      if (!isObject(item)) throw new OrdersError(400, `items[${i}] yaroqsiz`);
+      return {
+        productId: parseRequiredString(item.productId, `items[${i}].productId`),
+        quantity: parsePositiveInt(item.quantity, `items[${i}].quantity`),
+        note: parseOptionalString(item.note)
+      };
+    });
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const lastOrder = await tx.order.findFirst({
+          where: { branchId },
+          orderBy: { orderNumber: "desc" },
+          select: { orderNumber: true }
+        });
+        const nextOrderNumber = (lastOrder?.orderNumber ?? 0) + 1;
+
+        const newOrder = await tx.order.create({
+          data: {
+            branchId,
+            tableId: null,
+            waiterId: actor.role === "WAITER" ? actor.userId : null,
+            shiftId: actor.role === "WAITER" ? (actor.shiftId ?? null) : null,
+            orderNumber: nextOrderNumber,
+            status: "OPEN",
+            commissionPercent: zeroDecimal(),
+            commissionAmount: zeroDecimal()
+          },
+          select: { id: true }
+        });
+
+        const productIds = [...new Set(items.map((i) => i.productId))];
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds }, branchId, isActive: true },
+          select: { id: true, name: true, price: true }
+        });
+        const productMap = new Map(products.map((p) => [p.id, p]));
+
+        for (const item of items) {
+          if (!productMap.has(item.productId)) {
+            throw new OrdersError(404, `Mahsulot topilmadi: ${item.productId}`);
+          }
+        }
+
+        await tx.orderItem.createMany({
+          data: items.map((item) => {
+            const product = productMap.get(item.productId)!;
+            const unitPrice = product.price;
+            return {
+              orderId: newOrder.id,
+              productId: product.id,
+              productName: product.name,
+              unitPrice,
+              quantity: item.quantity,
+              lineTotal: buildLineTotal(unitPrice, item.quantity),
+              note: item.note ?? null
+            };
+          })
+        });
+
+        await recalcOrderTotalsTx(tx, newOrder.id);
+        const order = await getOrderByIdTx(tx, branchId, newOrder.id);
+
+        return {
+          order,
+          created: true
         };
       });
     } catch (error) {

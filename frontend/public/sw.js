@@ -1,8 +1,6 @@
-const STATIC_CACHE = "baxti-pos-static-v1";
-const RUNTIME_CACHE = "baxti-pos-runtime-v1";
+const STATIC_CACHE = "baxti-pos-static-v2";
+const RUNTIME_CACHE = "baxti-pos-runtime-v2";
 const SHELL_FILES = [
-  "/",
-  "/index.html",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
@@ -55,8 +53,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          if (response.status === 200) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(async () => {
@@ -64,27 +64,32 @@ self.addEventListener("fetch", (event) => {
           if (cachedPage) {
             return cachedPage;
           }
-          return caches.match("/index.html");
+          return fetch("/");
         }),
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
+    fetch(request)
+      .then((response) => {
+        if (response.status === 200) {
+          const copy = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(async () => {
+        const cached = await caches.match(request);
+        if (cached) {
+          return cached;
+        }
 
-      return fetch(request)
-        .then((response) => {
-          if (response.status === 200) {
-            const copy = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => caches.match("/index.html"));
-    }),
+        if (request.destination === "document") {
+          return fetch("/");
+        }
+
+        throw new Error("Keshda fayl topilmadi");
+      }),
   );
 });

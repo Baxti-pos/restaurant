@@ -41,6 +41,14 @@ ordersRouter.post(
   (req, res) => ordersController.openForTable(req, res)
 );
 ordersRouter.post(
+  "/open-and-create-takeout",
+  requireRoles(["OWNER", "MANAGER", "WAITER"]),
+  requireManagerPermissions(["ORDERS_MANAGE"]),
+  requireShift,
+  (req, res) => ordersController.openAndCreateTakeout(req, res)
+);
+
+ordersRouter.post(
   "/open-and-create",
   requireRoles(["OWNER", "MANAGER", "WAITER"]),
   requireManagerPermissions(["ORDERS_MANAGE"]),

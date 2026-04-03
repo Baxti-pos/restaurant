@@ -147,6 +147,7 @@ interface BackendOrder {
   id: string;
   branchId: string;
   tableId: string | null;
+  orderNumber: number;
   waiterId: string | null;
   status: BackendOrderStatus;
   subtotalAmount: string | number;
@@ -577,7 +578,9 @@ const mapOrder = (order: BackendOrder): Order => ({
   id: order.id,
   branchId: order.branchId,
   tableId: order.tableId ?? order.table?.id ?? '',
-  tableName: order.table?.name ?? 'Stol',
+  tableName: order.table?.name ?? `Olib ketish #${order.orderNumber}`,
+  orderNumber: order.orderNumber,
+  isTakeout: !order.tableId && !order.table,
   waiterId: order.waiterId ?? order.waiter?.id ?? '',
   waiterName: order.waiter?.fullName ?? 'Noma\'lum',
   status: order.status === 'CLOSED' ? 'closed' : 'open',
@@ -1138,6 +1141,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({
           tableId: data.tableId,
+          items: data.items
+            .filter((item) => item.productId)
+            .map((item) => ({
+              productId: item.productId,
+              quantity: Math.max(1, Math.trunc(item.quantity || 1)),
+              note: item.note ?? null
+            }))
+        })
+      });
+      return mapOrder(result.order);
+    },
+
+    createTakeout: async (data: Omit<Order, 'id' | 'closedAt'>): Promise<Order> => {
+      const result = await request<{
+        order: BackendOrder;
+      }>('/orders/open-and-create-takeout', {
+        method: 'POST',
+        body: JSON.stringify({
           items: data.items
             .filter((item) => item.productId)
             .map((item) => ({

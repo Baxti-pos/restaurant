@@ -156,6 +156,8 @@ export interface Order {
   branchId: string;
   tableId: string;
   tableName: string;
+  orderNumber?: number;
+  isTakeout?: boolean;
   waiterId: string;
   waiterName: string;
   status: OrderStatus;
