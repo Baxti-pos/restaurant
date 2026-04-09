@@ -273,6 +273,8 @@ function AppRoutes() {
   const activeBranch = branches.find((branch) => branch.id === activeBranchId);
   const activeBranchName = activeBranch?.name || '';
   const activeBranchCommissionPercent = activeBranch?.commissionPercent ?? 0;
+  const activeBranchPrinterIp = activeBranch?.printerIp ?? null;
+  const activeBranchPrinterPort = activeBranch?.printerPort ?? 9100;
 
   const ProtectedRoute = ({ children, page }: { children: React.ReactNode; page: string }) => {
     if (!canAccessPage(user, page)) {
@@ -335,6 +337,8 @@ function AppRoutes() {
                 activeBranchId={activeBranchId}
                 activeBranchName={activeBranchName}
                 activeBranchCommissionPercent={activeBranchCommissionPercent}
+                activeBranchPrinterIp={activeBranchPrinterIp}
+                activeBranchPrinterPort={activeBranchPrinterPort}
               />
             </ProtectedRoute>
           }

@@ -37,6 +37,8 @@ interface BackendBranch {
   address: string | null;
   shiftEnd?: string | null;
   commissionPercent?: string | number | null;
+  printerIp?: string | null;
+  printerPort?: number | null;
   isActive: boolean;
 }
 
@@ -456,6 +458,8 @@ const mapBranch = (branch: BackendBranch): Branch => ({
   shiftEnd: branch.shiftEnd ?? DEFAULT_SHIFT_END,
   timezone: 'Asia/Tashkent',
   commissionPercent: toNumber(branch.commissionPercent ?? 0),
+  printerIp: branch.printerIp ?? null,
+  printerPort: branch.printerPort ?? 9100,
   isActive: branch.isActive
 });
 
@@ -722,7 +726,9 @@ export const api = {
           address: data.address,
           shiftEnd: data.shiftEnd,
           isActive: data.isActive,
-          commissionPercent: data.commissionPercent ?? 0
+          commissionPercent: data.commissionPercent ?? 0,
+          printerIp: data.printerIp ?? null,
+          printerPort: data.printerPort ?? 9100
         })
       });
 
@@ -737,6 +743,8 @@ export const api = {
       if (data.shiftEnd !== undefined) payload.shiftEnd = data.shiftEnd;
       if (data.isActive !== undefined) payload.isActive = data.isActive;
       if (data.commissionPercent !== undefined) payload.commissionPercent = data.commissionPercent;
+      if (data.printerIp !== undefined) payload.printerIp = data.printerIp;
+      if (data.printerPort !== undefined) payload.printerPort = data.printerPort;
 
       const updated = await request<BackendBranch>(`/branches/${id}`, {
         method: 'PATCH',

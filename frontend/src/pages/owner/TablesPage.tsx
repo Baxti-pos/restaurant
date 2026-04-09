@@ -53,6 +53,8 @@ interface TablesPageProps {
   activeBranchId: string;
   activeBranchName: string;
   activeBranchCommissionPercent: number;
+  activeBranchPrinterIp?: string | null;
+  activeBranchPrinterPort?: number;
 }
 
 const getErrorMessage = (error: unknown) =>
@@ -140,6 +142,8 @@ export function TablesPage({
   activeBranchId,
   activeBranchName,
   activeBranchCommissionPercent,
+  activeBranchPrinterIp,
+  activeBranchPrinterPort = 9100,
 }: TablesPageProps) {
   const auth = getAuth();
   const user = auth.user;
@@ -956,16 +960,23 @@ export function TablesPage({
       toast.success("Buyurtma yopildi");
 
       try {
-        await printReceipt({
-          branchName: activeBranchName || "Filial",
-          tableName: closedOrder.tableName,
-          waiterName: closedOrder.waiterName,
-          orderId: closedOrder.id,
-          items: closedOrder.items,
-          total: closedOrder.total,
-          paymentType,
-          paidAtIso,
-        });
+        if (activeBranchPrinterIp) {
+          await printReceipt({
+            branchName: activeBranchName || "Filial",
+            tableName: closedOrder.tableName,
+            waiterName: closedOrder.waiterName,
+            orderId: closedOrder.id,
+            items: closedOrder.items,
+            subtotal: closedOrder.subtotal,
+            commission: closedOrder.commission,
+            commissionPercent: closedOrder.commissionPercent,
+            total: closedOrder.total,
+            paymentType,
+            paidAtIso,
+            printerIp: activeBranchPrinterIp,
+            printerPort: activeBranchPrinterPort,
+          });
+        }
       } catch {
         toast.error(
           "Checkni chop etib bo'lmadi. Xprinter sozlamasini tekshiring",

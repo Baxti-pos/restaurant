@@ -24,7 +24,9 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
     address: '',
     shiftStart: '08:00',
     shiftEnd: '22:00',
-    commissionPercent: '0'
+    commissionPercent: '0',
+    printerIp: '',
+    printerPort: '9100'
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => {
@@ -44,7 +46,9 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       address: '',
       shiftStart: '08:00',
       shiftEnd: '22:00',
-      commissionPercent: '0'
+      commissionPercent: '0',
+      printerIp: '',
+      printerPort: '9100'
     });
     setErrors({});
     setModalOpen(true);
@@ -56,7 +60,9 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
       address: b.address,
       shiftStart: b.shiftStart,
       shiftEnd: b.shiftEnd,
-      commissionPercent: String(b.commissionPercent ?? 0)
+      commissionPercent: String(b.commissionPercent ?? 0),
+      printerIp: b.printerIp ?? '',
+      printerPort: String(b.printerPort ?? 9100)
     });
     setErrors({});
     setModalOpen(true);
@@ -77,6 +83,8 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
         await api.branches.update(editing.id, {
           ...form,
           commissionPercent: Number(form.commissionPercent),
+          printerIp: form.printerIp || null,
+          printerPort: Number(form.printerPort) || 9100,
           timezone: 'Asia/Tashkent'
         });
         toast.success('Filial yangilandi');
@@ -84,6 +92,8 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
         await api.branches.create({
           ...form,
           commissionPercent: Number(form.commissionPercent),
+          printerIp: form.printerIp || null,
+          printerPort: Number(form.printerPort) || 9100,
           timezone: 'Asia/Tashkent',
           isActive: true
         });
@@ -380,12 +390,24 @@ export function BranchesPage({ onBranchesChange }: BranchesPageProps) {
             max="100"
             step="0.01"
             value={form.commissionPercent}
-            onChange={(e) =>
-            setForm({
-              ...form,
-              commissionPercent: e.target.value
-            })
-            } />
+            onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })}
+          />
+
+          <Input
+            label="Printer IP (tarmoq printer)"
+            type="text"
+            placeholder="192.168.1.100"
+            value={form.printerIp}
+            onChange={(e) => setForm({ ...form, printerIp: e.target.value })}
+          />
+
+          <Input
+            label="Printer port"
+            type="number"
+            placeholder="9100"
+            value={form.printerPort}
+            onChange={(e) => setForm({ ...form, printerPort: e.target.value })}
+          />
 
           <div className="flex space-x-3 pt-2">
             <Button

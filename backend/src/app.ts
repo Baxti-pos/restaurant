@@ -15,6 +15,7 @@ import { publicQrRouter } from "./modules/public-qr/public-qr.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
 import { tablesRouter } from "./modules/tables/tables.routes.js";
 import { waitersRouter } from "./modules/waiters/waiters.routes.js";
+import { printRouter } from "./modules/print/print.routes.js";
 
 export const app = express();
 
@@ -58,6 +59,7 @@ app.use("/orders", ordersRouter);
 app.use("/expenses", expensesRouter);
 app.use("/reports", reportsRouter);
 app.use("/me", meRouter);
+app.use("/print", printRouter);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({

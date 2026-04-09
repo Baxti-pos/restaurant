@@ -124,6 +124,8 @@ export const branchesService = {
         address: true,
         shiftEnd: true,
         commissionPercent: true,
+        printerIp: true,
+        printerPort: true,
         isActive: true,
         createdAt: true,
         updatedAt: true
@@ -145,6 +147,8 @@ export const branchesService = {
         address: true,
         shiftEnd: true,
         commissionPercent: true,
+        printerIp: true,
+        printerPort: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -176,6 +180,8 @@ export const branchesService = {
     const shiftEnd = parseOptionalShiftEnd(payload.shiftEnd);
     const isActive = parseOptionalBoolean(payload.isActive);
     const commissionPercent = parseCommissionPercent(payload.commissionPercent);
+    const printerIp = parseOptionalString(payload.printerIp);
+    const printerPort = typeof payload.printerPort === "number" ? payload.printerPort : undefined;
 
     try {
       const branch = await prisma.branch.create({
@@ -184,6 +190,8 @@ export const branchesService = {
           name,
           address: address ?? null,
           shiftEnd: shiftEnd ?? null,
+          printerIp: printerIp ?? null,
+          ...(printerPort !== undefined ? { printerPort } : {}),
           ...(isActive !== undefined ? { isActive } : {}),
           ...(commissionPercent !== undefined ? { commissionPercent } : {})
         },
@@ -192,6 +200,8 @@ export const branchesService = {
           name: true,
           address: true,
           shiftEnd: true,
+          printerIp: true,
+          printerPort: true,
           isActive: true,
           createdAt: true,
           updatedAt: true
@@ -240,6 +250,16 @@ export const branchesService = {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, "printerIp")) {
+      data.printerIp = parseOptionalString(payload.printerIp) ?? null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, "printerPort")) {
+      if (typeof payload.printerPort === "number") {
+        data.printerPort = payload.printerPort;
+      }
+    }
+
     if (Object.keys(data).length === 0) {
       throw new BranchesError(400, "Yangilash uchun kamida bitta maydon yuboring");
     }
@@ -253,6 +273,8 @@ export const branchesService = {
           name: true,
           address: true,
           shiftEnd: true,
+          printerIp: true,
+          printerPort: true,
           isActive: true,
           createdAt: true,
           updatedAt: true

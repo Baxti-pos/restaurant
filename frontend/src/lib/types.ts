@@ -53,6 +53,8 @@ export interface Branch {
   shiftEnd: string;
   timezone: 'Asia/Tashkent';
   commissionPercent: number;
+  printerIp?: string | null;
+  printerPort?: number;
   isActive: boolean;
 }
 

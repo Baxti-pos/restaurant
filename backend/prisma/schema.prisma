@@ -129,6 +129,8 @@ model Branch {
   address            String?
   shiftEnd           String?
   commissionPercent  Decimal             @default(0) @db.Decimal(5, 2)
+  printerIp          String?
+  printerPort        Int                 @default(9100)
   isActive           Boolean             @default(true)
   ownerId            String
   owner              User                @relation("BranchOwner", fields: [ownerId], references: [id], onDelete: Restrict)
